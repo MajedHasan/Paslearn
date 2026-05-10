@@ -30,7 +30,7 @@ const AdminSidebar = (props: Props) => {
         <div className="flex items-center gap-3 pl-4">
           <div className="w-7 h-7 rounded-full bg-themeAdminPrimary"></div>
           <span className="text-lg font-bold text-themeAdminPrimary">
-            Course creator hub
+            Paslearn
           </span>
         </div>
         <div className="flex flex-1 overflow-hiden max-h-full">
@@ -84,14 +84,12 @@ const AdminSidebar = (props: Props) => {
           <div className="flex gap-2">
             <Avatar>
               <AvatarImage src={user?.profileImageUrl} alt="Profile Pic" />
-              <AvatarFallback>{user?.username}</AvatarFallback>
+              <AvatarFallback>{user?.name}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col justify-center">
-              <span className="font-bold text-sm">
-                {user?.publicMetadata?.role as string}
-              </span>
+              <span className="font-bold text-sm">{user?.role as string}</span>
               <span className="text-xs max-w-[140px] block break-words">
-                {user?.emailAddresses[0].emailAddress}
+                {user?.email}
               </span>
             </div>
           </div>

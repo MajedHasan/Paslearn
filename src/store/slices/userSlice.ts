@@ -1,188 +1,289 @@
+import api from "@/lib/api";
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
+import {
+  signupWithEmailAndPassword,
+  signinWithEmailAndPassword,
+  signupWithGoogle,
+  signinWithGoogle,
+} from "@/lib/firebaseAuth";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { getFriendlyAuthError } from "@/lib/authErrors";
 
-// Define User and State Types
-interface PublicMetadata {
+export interface User {
+  id: string;
+  email: string;
   role: string;
-  permissions?: string[];
+  name?: string;
+  profileImageUrl?: string;
 }
 
-interface User {
-  publicMetadata: PublicMetadata;
-  emailAddresses: [{ emailAddress: string }];
-  profileImageUrl: string;
-  username: string;
-}
-
-interface AuthPayload {
+export interface AuthPayload {
   user: User;
-  token: string;
+  accessToken: string;
+  refreshToken: string;
 }
 
-interface UserState {
+export interface UserState {
   currentUser: User | null;
-  token: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
+  success: string | null; // ✅ success messages
+  redirectPath: string | null;
 }
 
-// Helper for LocalStorage and Token Management
-const storageKey = "currentUser";
-const tokenKey = "authToken";
+const storageUserKey = "currentUser";
+const storageAccessKey = "accessToken";
+const storageRefreshKey = "refreshToken";
 
-const storage = {
-  getUser: (): User | null => {
-    if (typeof window !== "undefined") {
-      const storedUser = localStorage.getItem(storageKey);
-      return storedUser ? JSON.parse(storedUser) : null;
-    }
-    return null;
+/**
+ * safeStorage - tiny wrapper around localStorage that no-ops on server.
+ * Keeps your existing logic but prevents SSR crashes (localStorage undefined).
+ */
+const safeStorage = {
+  get: (key: string): string | null =>
+    typeof window === "undefined" ? null : localStorage.getItem(key),
+  set: (key: string, value: string): void => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(key, value);
   },
-  setUser: (user: User) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(storageKey, JSON.stringify(user));
-    }
-  },
-  clearUser: () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(storageKey);
-    }
+  remove: (key: string): void => {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem(key);
   },
 };
 
-const tokenStorage = {
-  set: (token: string) => {
-    if (typeof window !== "undefined") {
-      document.cookie = `${tokenKey}=${token}; path=/; Secure; HttpOnly`;
-    }
-  },
-  clear: () => {
-    if (typeof window !== "undefined") {
-      document.cookie = `${tokenKey}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly`;
-    }
-  },
+const getStoredUser = (): User | null => {
+  const u = safeStorage.get(storageUserKey);
+  return u ? JSON.parse(u) : null;
 };
 
-// Initial State
+const roleRedirectMap: Record<string, string> = {
+  student: "/student",
+  teacher: "/teacher",
+  admin: "/admin",
+};
+
 const initialState: UserState = {
-  currentUser: storage.getUser(),
-  token: null,
-  isAuthenticated: !!storage.getUser(),
+  currentUser: getStoredUser(),
+  accessToken: safeStorage.get(storageAccessKey),
+  refreshToken: safeStorage.get(storageRefreshKey),
+  isAuthenticated: !!safeStorage.get(storageAccessKey),
   loading: false,
   error: null,
+  success: null,
+  redirectPath: null,
 };
 
-// Async Thunks for Login and Register
-export const loginUser = createAsyncThunk(
-  "user/loginUser",
-  async (
-    credentials: { email: string; password: string },
-    { rejectWithValue }
-  ) => {
-    try {
-      const response = await fetch("/api/users/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(credentials),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Login failed");
-
-      tokenStorage.set(data.token);
-      return { user: data.user, token: data.token } as AuthPayload;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+// --- LOGIN ---
+export const loginUser = createAsyncThunk<
+  AuthPayload & { message: string },
+  { method: "email" | "google"; email?: string; password?: string },
+  { rejectValue: string }
+>("user/login", async (credentials, { rejectWithValue }) => {
+  try {
+    let user;
+    if (credentials.method === "email") {
+      if (!credentials.email || !credentials.password)
+        throw new Error("Email and password required");
+      user = await signinWithEmailAndPassword(
+        credentials.email,
+        credentials.password
+      );
+    } else {
+      user = await signinWithGoogle();
     }
+
+    const { data } = await api.post("/auth/login", {
+      email: user.email,
+      password: credentials.password || "firebase-google",
+    });
+
+    safeStorage.set(storageUserKey, JSON.stringify(data.user));
+    safeStorage.set(storageAccessKey, data.accessToken);
+    safeStorage.set(storageRefreshKey, data.refreshToken);
+
+    return { ...data, message: "Login successful" };
+  } catch (err: any) {
+    return rejectWithValue(
+      getFriendlyAuthError(
+        err.response?.data?.message || err.message || "Login failed"
+      )
+    );
   }
-);
+});
 
-export const registerUser = createAsyncThunk(
-  "user/registerUser",
-  async (
-    newUser: { email: string; password: string; full_name: string },
-    { rejectWithValue }
-  ) => {
-    try {
-      const response = await fetch("/api/users/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newUser),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Registration failed");
-
-      tokenStorage.set(data.token);
-      return { user: data.user, token: data.token } as AuthPayload;
-    } catch (error: any) {
-      return rejectWithValue(error.message);
+// --- REGISTER ---
+export const registerUser = createAsyncThunk<
+  any & { message: string },
+  {
+    method: "email" | "google";
+    email?: string;
+    password?: string;
+    name?: string;
+    role?: string;
+  },
+  { rejectValue: string }
+>("user/register", async (newUser, { rejectWithValue }) => {
+  try {
+    let user;
+    if (newUser.method === "email") {
+      if (!newUser.email || !newUser.password)
+        throw new Error("Email and password required");
+      user = await signupWithEmailAndPassword(
+        newUser.email,
+        newUser.password,
+        newUser.name
+      );
+    } else {
+      user = await signupWithGoogle();
     }
-  }
-);
 
-// Slice Definition
+    const { data } = await api.post("/auth/register", {
+      email: user.email,
+      password: newUser.password || "firebase-google",
+      name: newUser.name || user.displayName,
+      role: newUser.role,
+    });
+
+    return { ...data, message: "Registration successful" };
+  } catch (err: any) {
+    return rejectWithValue(
+      getFriendlyAuthError(
+        err.response?.data?.message || err.message || "Registration failed"
+      )
+    );
+  }
+});
+
+// --- LOGOUT ---
+export const logoutUser = createAsyncThunk<
+  { message: string },
+  void,
+  { rejectValue: string }
+>("user/logout", async (_, { getState, rejectWithValue }) => {
+  try {
+    const state = getState() as { user: UserState };
+    const refreshToken = state.user.refreshToken;
+
+    // Backend logout
+    await api.post("/auth/logout", { refreshToken });
+
+    // Firebase logout
+    await signOut(auth);
+
+    // Clear localStorage
+    safeStorage.remove(storageUserKey);
+    safeStorage.remove(storageAccessKey);
+    safeStorage.remove(storageRefreshKey);
+
+    return { message: "Logout successful" };
+  } catch (err: any) {
+    return rejectWithValue(
+      getFriendlyAuthError(
+        err.response?.data?.message || err.message || "Logout failed"
+      )
+    );
+  }
+});
+
+// --- SLICE ---
 const userSlice = createSlice({
   name: "user",
   initialState,
   reducers: {
-    logout: (state) => {
+    clearAuth: (state) => {
       state.currentUser = null;
-      state.token = null;
+      state.accessToken = null;
+      state.refreshToken = null;
       state.isAuthenticated = false;
       state.loading = false;
       state.error = null;
-      storage.clearUser();
-      tokenStorage.clear();
+      state.success = null;
+      state.redirectPath = null;
+      safeStorage.remove(storageUserKey);
+      safeStorage.remove(storageAccessKey);
+      safeStorage.remove(storageRefreshKey);
     },
-    setLoading: (state, action: PayloadAction<boolean>) => {
-      state.loading = action.payload;
-    },
-    setError: (state, action: PayloadAction<string | null>) => {
-      state.error = action.payload;
+    clearError: (state) => {
+      state.error = null;
+      state.success = null;
     },
   },
   extraReducers: (builder) => {
     builder
+      // Login
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.success = null;
+        state.redirectPath = null;
       })
       .addCase(
         loginUser.fulfilled,
-        (state, action: PayloadAction<AuthPayload>) => {
+        (state, action: PayloadAction<AuthPayload & { message: string }>) => {
           state.currentUser = action.payload.user;
-          state.token = action.payload.token;
+          state.accessToken = action.payload.accessToken;
+          state.refreshToken = action.payload.refreshToken;
           state.isAuthenticated = true;
           state.loading = false;
-          state.error = null;
-          storage.setUser(action.payload.user);
+          state.success = action.payload.message;
+          state.redirectPath = roleRedirectMap[action.payload.user.role] || "/";
         }
       )
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = action.payload || "Login failed";
+        state.success = null;
+        state.redirectPath = null;
       })
+      // Register
       .addCase(registerUser.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.success = null;
       })
       .addCase(
         registerUser.fulfilled,
-        (state, action: PayloadAction<AuthPayload>) => {
-          state.currentUser = action.payload.user;
-          state.token = action.payload.token;
-          state.isAuthenticated = true;
+        (state, action: PayloadAction<any & { message: string }>) => {
           state.loading = false;
-          state.error = null;
-          storage.setUser(action.payload.user);
+          state.success = action.payload.message;
         }
       )
       .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = action.payload || "Registration failed";
+        state.success = null;
+      })
+      // Logout
+      .addCase(logoutUser.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.success = null;
+      })
+      .addCase(
+        logoutUser.fulfilled,
+        (state, action: PayloadAction<{ message: string }>) => {
+          state.currentUser = null;
+          state.accessToken = null;
+          state.refreshToken = null;
+          state.isAuthenticated = false;
+          state.loading = false;
+          state.error = null;
+          state.success = action.payload.message;
+          state.redirectPath = null;
+        }
+      )
+      .addCase(logoutUser.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload || "Logout failed";
+        state.success = null;
       });
   },
 });
 
-// Export actions and reducer
-export const { logout, setLoading, setError } = userSlice.actions;
+export const { clearAuth, clearError } = userSlice.actions;
 export default userSlice.reducer;

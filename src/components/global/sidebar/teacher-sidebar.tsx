@@ -20,9 +20,7 @@ const TeacherSidebar = (props: Props) => {
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-3 pl-4">
           <Star />
-          <span className="text-lg font-bold text-slate-900">
-            Course creator hub
-          </span>
+          <span className="text-lg font-bold text-slate-900">Paslearn</span>
         </div>
         <div className="flex flex-1 overflow-hiden max-h-full">
           <div className="flex flex-col overflow-scroll flex-1">

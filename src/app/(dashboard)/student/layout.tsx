@@ -19,21 +19,30 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useAppSelector } from "@/hooks/useRedux";
+import { useAppDispatch, useAppSelector } from "@/hooks/useRedux";
+import { logoutUser } from "@/store/slices/userSlice";
 import {
   BarChart,
   Bell,
+  LogOut,
   Mail,
   MailOpen,
   MessageSquareTextIcon,
   NewspaperIcon,
   PlusCircle,
+  Settings,
+  User,
 } from "lucide-react";
 import Link from "next/link";
 
 const StudentLayout = ({ children }: { children: React.ReactNode }) => {
   const user = useAppSelector((state) => state.user.currentUser);
   const isAuthenticated = useAppSelector((state) => state.user.isAuthenticated);
+  const dispatch = useAppDispatch();
+
+  const handleLogout = () => {
+    dispatch(logoutUser());
+  };
 
   return (
     <>
@@ -402,10 +411,39 @@ const StudentLayout = ({ children }: { children: React.ReactNode }) => {
                       src={user?.profileImageUrl}
                       alt="Profile Pic"
                     />
-                    <AvatarFallback>{user?.username}</AvatarFallback>
+                    <AvatarFallback>
+                      {user?.name?.charAt(0).toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
                 </PopoverTrigger>
-                <PopoverContent></PopoverContent>
+                <PopoverContent className="w-[200px]">
+                  <div className="flex flex-col items-center justify-center gap-4">
+                    <Link
+                      href={`${process.env.NEXT_PUBLIC_DOMAIN}/student`}
+                      className="cursor-pointer flex w-full items-center"
+                    >
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Dashboard</span>
+                    </Link>
+                    <Link
+                      href={`${process.env.NEXT_PUBLIC_DOMAIN}/student/settings`}
+                      className="flex items-center w-full"
+                    >
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Settings</span>
+                    </Link>
+                    <Button
+                      variant={"destructive"}
+                      className="w-full"
+                      onClick={handleLogout}
+                    >
+                      <div className="flex">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Log out</span>
+                      </div>
+                    </Button>
+                  </div>
+                </PopoverContent>
               </Popover>
             </div>
           </div>

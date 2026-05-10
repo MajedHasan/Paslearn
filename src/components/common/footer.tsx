@@ -108,7 +108,8 @@ const Footer = (props: Props) => {
         <div className="mt-5">
           <Separator className="mb-4" />
           <p className="text-center text-sm">
-            © 2024 Course creator hub. All rights reserved.
+            © {new Date().getFullYear()} Course creator hub. All rights
+            reserved.
           </p>
         </div>
       </div>

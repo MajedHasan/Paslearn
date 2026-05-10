@@ -22,7 +22,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTrigger } from "../ui/sheet";
 import { Separator } from "../ui/separator";
 import { useAppDispatch, useAppSelector } from "@/hooks/useRedux";
-import { logout } from "@/store/slices/userSlice";
+import { logoutUser } from "@/store/slices/userSlice";
 
 type Props = {};
 
@@ -32,15 +32,15 @@ const Header = (props: Props) => {
   const dispatch = useAppDispatch();
 
   const handleLogout = () => {
-    dispatch(logout());
+    dispatch(logoutUser());
   };
 
-  let dashboard = "users";
-  if (user?.publicMetadata.role === "ADMIN") {
+  let dashboard = "student";
+  if (user?.role === "ADMIN") {
     dashboard = "admin";
-  } else if (user?.publicMetadata.role === "TEACHER") {
+  } else if (user?.role === "TEACHER") {
     dashboard = "teacher";
-  } else if (user?.publicMetadata.role === "STUDENT") {
+  } else if (user?.role === "STUDENT") {
     dashboard = "student";
   }
 
@@ -84,6 +84,9 @@ const Header = (props: Props) => {
                   <Link href={"/contact"} className="hover:text-slate-400">
                     Contact
                   </Link>
+                  <Link href={"/wait-list"} className="hover:text-slate-400">
+                    Wait List
+                  </Link>
                 </nav>
               </SheetContent>
             </Sheet>
@@ -107,21 +110,26 @@ const Header = (props: Props) => {
               <Link href={"/contact"} className="hover:text-slate-400">
                 Contact
               </Link>
+              <Link href={"/wait-list"} className="hover:text-slate-400">
+                Wait List
+              </Link>
             </nav>
           </div>
           {user ? (
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Avatar className="cursor-pointer">
+                  <Avatar className="cursor-pointer border-2">
                     <AvatarImage src={user.profileImageUrl} alt="Profile Pic" />
-                    <AvatarFallback>{user.username}</AvatarFallback>
+                    <AvatarFallback className="bg-yellow-50">
+                      {user?.name?.charAt(0).toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56">
                   <DropdownMenuItem asChild>
                     <Link
-                      href={`${process.env.NEXT_PUBLIC_DOMAIN}/${dashboard}`}
+                      href={`/${dashboard}`}
                       className="cursor-pointer flex w-full"
                     >
                       <User className="mr-2 h-4 w-4" />
@@ -129,28 +137,33 @@ const Header = (props: Props) => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuGroup>
-                    <DropdownMenuItem>
-                      <Link
-                        href={`${process.env.NEXT_PUBLIC_DOMAIN}/${dashboard}`}
-                        className="cursor-pointer flex w-full"
-                      >
+                    <DropdownMenuItem asChild>
+                      <Link href={`/${dashboard}`} className="flex w-full">
                         <User className="mr-2 h-4 w-4" />
                         <span>Dashboard</span>
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      <span>Messages</span>
+                    <DropdownMenuItem asChild>
+                      <Link href="/messages" className="flex w-full">
+                        <MessageCircle className="mr-2 h-4 w-4" />
+                        <span>Messages</span>
+                      </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Settings className="mr-2 h-4 w-4" />
-                      <span>Settings</span>
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings" className="flex w-full">
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Settings</span>
+                      </Link>
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem>
                     {/* <SignOutButton> */}
-                    <Button variant={"destructive"} className="w-full">
+                    <Button
+                      variant={"destructive"}
+                      className="w-full"
+                      onClick={handleLogout}
+                    >
                       <div className="flex">
                         <LogOut className="mr-2 h-4 w-4" />
                         <span>Log out</span>
