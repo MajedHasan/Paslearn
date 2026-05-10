@@ -2,7 +2,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:5001/api", // match backend
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api", // match backend
   withCredentials: true,
 });
 
@@ -24,16 +24,15 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem("refreshToken");
         if (!refreshToken) throw new Error("Missing refresh token");
         const { data } = await axios.post(
-          "http://localhost:5001/api/auth/refresh",
+          `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
           {
             refreshToken,
-          }
+          },
         );
         localStorage.setItem("accessToken", data.accessToken);
         localStorage.setItem("refreshToken", data.refreshToken);
-        api.defaults.headers.common[
-          "Authorization"
-        ] = `Bearer ${data.accessToken}`;
+        api.defaults.headers.common["Authorization"] =
+          `Bearer ${data.accessToken}`;
         return api(originalRequest);
       } catch (err) {
         localStorage.removeItem("accessToken");
@@ -43,7 +42,7 @@ api.interceptors.response.use(
       }
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
