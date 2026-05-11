@@ -1,25 +1,24 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-
 import axios from "axios";
 import { usePathname } from "next/navigation";
 
 import api from "@/lib/api";
-
 import type { Experience } from "@/app/(dashboard)/admin/experiences/utils/experience.types";
 
 import WaitlistPage from "@/components/experiences/WaitlistPage";
-
+import PopupExperience from "@/components/experiences/PopupExperience";
+import BannerExperience from "@/components/experiences/BannerExperience";
 import SystemExperience from "@/components/system/SystemExperience";
 
-const EXPERIENCE_COMPONENTS: Record<
+const COMPONENTS: Record<
   string,
-  React.ComponentType<{
-    config?: Record<string, any>;
-  }>
+  React.ComponentType<{ config?: Record<string, any> }>
 > = {
   waitlist_v1: WaitlistPage,
+  popup_v1: PopupExperience,
+  banner_v1: BannerExperience,
 };
 
 type SystemState = "loading" | "ready" | "offline" | "backend" | "blocked";
@@ -31,80 +30,51 @@ export default function ExperienceLayout({
 }) {
   const pathname = usePathname();
 
-  const [experiences, setExperiences] = useState<Experience[]>([]);
-
   const [state, setState] = useState<SystemState>("loading");
 
+  const [experiences, setExperiences] = useState<Experience[]>([]);
+
+  const [activePopupIds, setActivePopupIds] = useState<string[]>([]);
+  const [activeBannerIds, setActiveBannerIds] = useState<string[]>([]);
+
+  /*
+  ==========================================
+  FETCH
+  ==========================================
+  */
   const loadExperiences = useCallback(async () => {
     setState("loading");
 
     try {
-      const response = await api.get("/experiences/public", {
+      const res = await api.get("/experiences/public", {
         timeout: 8000,
       });
 
-      const data = response?.data?.data ?? response?.data;
+      const data = res?.data?.data ?? res?.data;
 
-      /**
-       * Backend must explicitly return an array.
-       * [] = allow app
-       * Anything else = block
-       */
       if (!Array.isArray(data)) {
-        throw new Error("Invalid experience payload");
+        throw new Error("Invalid payload");
       }
 
       setExperiences(data);
-
-      /**
-       * Backend explicitly approved rendering.
-       */
       setState("ready");
     } catch (error) {
-      console.error("Experience bootstrap failed:", error);
+      console.error(error);
 
-      /**
-       * Browser offline
-       */
       if (!navigator.onLine) {
-        setState("offline");
-        return;
+        return setState("offline");
       }
 
-      /**
-       * Axios-specific classification
-       */
       if (axios.isAxiosError(error)) {
-        const status = error.response?.status;
-
-        /**
-         * No response:
-         * timeout / DNS / connection refused
-         */
         if (!error.response) {
-          setState("offline");
-          return;
+          return setState("offline");
         }
 
-        /**
-         * Backend infra failure
-         */
-        if (status && status >= 500) {
-          setState("backend");
-          return;
+        if (error.response.status >= 500) {
+          return setState("backend");
         }
-
-        /**
-         * Unauthorized / bad request /
-         * corrupted response etc
-         */
-        setState("blocked");
-        return;
       }
 
-      /**
-       * Unknown parsing/runtime issue
-       */
       setState("blocked");
     }
   }, []);
@@ -113,75 +83,249 @@ export default function ExperienceLayout({
     loadExperiences();
   }, [loadExperiences]);
 
-  const activeExperience = useMemo(() => {
+  /*
+  ==========================================
+  HELPERS
+  ==========================================
+  */
+  const isRouteMatched = useCallback(
+    (experience: Experience) => {
+      const excluded = experience.target?.excludeRoutes?.includes(pathname);
+
+      if (excluded) return false;
+
+      if (experience.target?.scope === "global") {
+        return true;
+      }
+
+      return experience.target?.routes?.includes(pathname);
+    },
+    [pathname],
+  );
+
+  const isScheduleValid = (experience: Experience) => {
+    const now = new Date();
+
+    const startAt = experience.schedule?.startAt
+      ? new Date(experience.schedule.startAt)
+      : null;
+
+    const endAt = experience.schedule?.endAt
+      ? new Date(experience.schedule.endAt)
+      : null;
+
+    if (startAt && now < startAt) return false;
+
+    if (endAt && now > endAt) return false;
+
+    return true;
+  };
+
+  const availableExperiences = useMemo(() => {
     return experiences
-      .filter(
-        (experience) => experience.enabled && experience.type === "full_page",
-      )
-      .sort((a, b) => b.priority - a.priority)
-      .find((experience) => {
-        const isGlobal = experience.target?.scope === "global";
+      .filter((exp) => exp.enabled)
+      .filter(isRouteMatched)
+      .filter(isScheduleValid)
+      .sort((a, b) => b.priority - a.priority);
+  }, [experiences, isRouteMatched]);
 
-        const routeMatched = experience.target?.routes?.includes(pathname);
+  /*
+  ==========================================
+  FULL PAGE
+  ==========================================
+  */
+  const fullPageExperience = useMemo(() => {
+    return availableExperiences.find((exp) => exp.type === "full_page");
+  }, [availableExperiences]);
 
-        const excluded = experience.target?.excludeRoutes?.includes(pathname);
+  /*
+  ==========================================
+  REDIRECT
+  ==========================================
+  */
+  useEffect(() => {
+    const redirectExperience: any = availableExperiences.find(
+      (exp) => exp.type === "redirect",
+    );
 
-        if (excluded) {
-          return false;
+    if (!redirectExperience?.payload?.url) return;
+
+    const delay = Number(redirectExperience.trigger?.value) || 0;
+
+    const timer = setTimeout(() => {
+      window.location.href = redirectExperience.payload.url;
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [availableExperiences]);
+
+  /*
+  ==========================================
+  POPUPS + BANNERS TRIGGERS
+  ==========================================
+  */
+  useEffect(() => {
+    if (!availableExperiences.length) return;
+
+    const timers: NodeJS.Timeout[] = [];
+
+    const onScroll = () => {
+      const scrollPercent =
+        (window.scrollY / (document.body.scrollHeight - window.innerHeight)) *
+        100;
+
+      availableExperiences.forEach((exp) => {
+        if (exp.trigger?.type !== "scroll") return;
+
+        const target = Number(exp.trigger?.value || 50);
+
+        if (scrollPercent < target) return;
+
+        if (exp.type === "popup") {
+          setActivePopupIds((prev) =>
+            prev.includes(exp._id) ? prev : [...prev, exp._id],
+          );
         }
 
-        return isGlobal || routeMatched;
+        if (exp.type === "banner") {
+          setActiveBannerIds((prev) =>
+            prev.includes(exp._id) ? prev : [...prev, exp._id],
+          );
+        }
       });
-  }, [experiences, pathname]);
+    };
 
-  /**
-   * Loading state
-   */
+    const onExitIntent = (e: MouseEvent) => {
+      if (e.clientY > 20) return;
+
+      availableExperiences.forEach((exp) => {
+        if (exp.trigger?.type !== "exit_intent") return;
+
+        if (exp.type === "popup") {
+          setActivePopupIds((prev) =>
+            prev.includes(exp._id) ? prev : [...prev, exp._id],
+          );
+        }
+      });
+    };
+
+    availableExperiences.forEach((exp) => {
+      const triggerType = exp.trigger?.type || "always";
+
+      if (triggerType === "always") {
+        if (exp.type === "popup") {
+          setActivePopupIds((prev) =>
+            prev.includes(exp._id) ? prev : [...prev, exp._id],
+          );
+        }
+
+        if (exp.type === "banner") {
+          setActiveBannerIds((prev) =>
+            prev.includes(exp._id) ? prev : [...prev, exp._id],
+          );
+        }
+      }
+
+      if (triggerType === "timer") {
+        const delay = Number(exp.trigger?.value || 3000);
+
+        const timer = setTimeout(() => {
+          if (exp.type === "popup") {
+            setActivePopupIds((prev) =>
+              prev.includes(exp._id) ? prev : [...prev, exp._id],
+            );
+          }
+
+          if (exp.type === "banner") {
+            setActiveBannerIds((prev) =>
+              prev.includes(exp._id) ? prev : [...prev, exp._id],
+            );
+          }
+        }, delay);
+
+        timers.push(timer);
+      }
+    });
+
+    window.addEventListener("scroll", onScroll);
+    document.addEventListener("mouseleave", onExitIntent);
+
+    return () => {
+      timers.forEach(clearTimeout);
+
+      window.removeEventListener("scroll", onScroll);
+      document.removeEventListener("mouseleave", onExitIntent);
+    };
+  }, [availableExperiences]);
+
+  /*
+  ==========================================
+  STATES
+  ==========================================
+  */
   if (state === "loading") {
     return <SystemExperience variant="loading" />;
   }
 
-  /**
-   * User connectivity issue
-   */
   if (state === "offline") {
     return <SystemExperience variant="offline" onRetry={loadExperiences} />;
   }
 
-  /**
-   * Backend/server issue
-   */
   if (state === "backend") {
     return <SystemExperience variant="backend" onRetry={loadExperiences} />;
   }
 
-  /**
-   * Payload/security issue
-   */
   if (state === "blocked") {
     return <SystemExperience variant="blocked" onRetry={loadExperiences} />;
   }
 
-  /**
-   * Active system experience
-   */
-  if (activeExperience) {
-    const Component = EXPERIENCE_COMPONENTS[activeExperience.componentKey];
+  /*
+  ==========================================
+  FULL PAGE OVERRIDE
+  ==========================================
+  */
+  if (fullPageExperience) {
+    const Component = COMPONENTS[fullPageExperience.componentKey];
 
-    /**
-     * Unknown component registration
-     * Safer to block.
-     */
     if (!Component) {
       return <SystemExperience variant="blocked" onRetry={loadExperiences} />;
     }
 
-    return <Component config={activeExperience.payload} />;
+    return <Component config={fullPageExperience.payload} />;
   }
 
-  /**
-   * Backend explicitly returned []
-   * Safe to render app
-   */
-  return <>{children}</>;
+  /*
+  ==========================================
+  NORMAL APP
+  ==========================================
+  */
+  return (
+    <>
+      {availableExperiences
+        .filter(
+          (exp) => exp.type === "banner" && activeBannerIds.includes(exp._id),
+        )
+        .map((exp) => {
+          const Component = COMPONENTS[exp.componentKey];
+
+          if (!Component) return null;
+
+          return <Component key={exp._id} config={exp.payload} />;
+        })}
+
+      {children}
+
+      {availableExperiences
+        .filter(
+          (exp) => exp.type === "popup" && activePopupIds.includes(exp._id),
+        )
+        .map((exp) => {
+          const Component = COMPONENTS[exp.componentKey];
+
+          if (!Component) return null;
+
+          return <Component key={exp._id} config={exp.payload} />;
+        })}
+    </>
+  );
 }

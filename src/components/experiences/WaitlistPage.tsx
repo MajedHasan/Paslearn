@@ -151,12 +151,12 @@ export default function WaitlistPage({
                 </div>
 
                 <h1 className="mt-6 text-4xl font-black tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-                  {/* {config?.title || "Wait List for Paslearn"} */}
-                  Wait List
+                  {config?.title || "Wait List for Paslearn"}
                 </h1>
 
                 <p className="mt-4 max-w-lg text-base font-medium leading-7 text-slate-600 sm:text-lg">
-                  Join 5,000+ experts and students already in the queue.
+                  {config?.description ||
+                    "Join 5,000+ experts and students already in the queue."}
                 </p>
 
                 <div className="mt-8 space-y-5">
@@ -339,7 +339,7 @@ export default function WaitlistPage({
                       <span className="relative inline-flex items-center gap-2">
                         {form.formState.isSubmitting
                           ? "Submitting..."
-                          : "Claim My Early Access"}
+                          : config?.buttonText || "Join the Waitlist"}
                         <ArrowRight className="h-4 w-4" />
                       </span>
                     </Button>

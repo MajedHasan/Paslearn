@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import {
+  ArrowRight,
+  Sparkles,
+  Route,
+  Shield,
+  TimerReset,
+  Layers3,
+} from "lucide-react";
+
 import { Experience, ExperienceFormValues } from "../utils/experience.types";
 import {
   COMPONENT_OPTIONS,
@@ -63,12 +73,33 @@ const emptyValues: ExperienceFormValues = {
   },
 };
 
+const routeExamples = {
+  routes: "/pricing\n/dashboard",
+  excludeRoutes: "/admin\n/auth/sign-in",
+};
+
+function toArray(value: string) {
+  return value
+    .split(/\n|,/g)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => (item.startsWith("/") ? item : `/${item}`))
+    .filter(Boolean);
+}
+
+function formatDateTime(value?: string) {
+  return value ? String(value).slice(0, 16) : "";
+}
+
 export default function ExperienceDialog({
   experience,
   onSaved,
   triggerLabel = "Create Experience",
 }: Props) {
   const isEdit = !!experience;
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [values, setValues] = useState<ExperienceFormValues>(emptyValues);
 
   const initialValues = useMemo<ExperienceFormValues>(() => {
     if (!experience) return emptyValues;
@@ -92,12 +123,8 @@ export default function ExperienceDialog({
           : "",
       },
       schedule: {
-        startAt: experience.schedule?.startAt
-          ? String(experience.schedule.startAt).slice(0, 16)
-          : "",
-        endAt: experience.schedule?.endAt
-          ? String(experience.schedule.endAt).slice(0, 16)
-          : "",
+        startAt: formatDateTime(experience.schedule?.startAt),
+        endAt: formatDateTime(experience.schedule?.endAt),
       },
       payload: {
         title: experience.payload?.title ?? "",
@@ -107,15 +134,11 @@ export default function ExperienceDialog({
     };
   }, [experience]);
 
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [values, setValues] = useState<ExperienceFormValues>(initialValues);
-
   useEffect(() => {
     if (open) setValues(initialValues);
   }, [open, initialValues]);
 
-  const update = <K extends keyof ExperienceFormValues>(
+  const setField = <K extends keyof ExperienceFormValues>(
     key: K,
     value: ExperienceFormValues[K],
   ) => {
@@ -129,19 +152,21 @@ export default function ExperienceDialog({
       const payload = {
         ...values,
         target: {
-          ...values.target,
-          routes: values.target.routes.filter(Boolean),
-          excludeRoutes: values.target.excludeRoutes.filter(Boolean),
+          scope: values.target.scope,
+          routes: toArray(values.target.routes.join("\n")),
+          excludeRoutes: toArray(values.target.excludeRoutes.join("\n")),
         },
         trigger: {
           type: values.trigger.type,
-          value: values.trigger.value === "" ? undefined : values.trigger.value,
+          value:
+            values.trigger.value.trim() === ""
+              ? undefined
+              : values.trigger.value.trim(),
         },
         schedule: {
           startAt: values.schedule.startAt || undefined,
           endAt: values.schedule.endAt || undefined,
         },
-        payload: values.payload,
       };
 
       if (isEdit && experience?._id) {
@@ -165,263 +190,345 @@ export default function ExperienceDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button className="bg-themeAdminPrimary hover:bg-themeAdminPrimary/90">
-          {triggerLabel}
+          {isEdit ? "Edit" : triggerLabel}
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="rounded-full">
+              <Sparkles className="mr-1 h-3.5 w-3.5" />
+              Experience Builder
+            </Badge>
+            <Badge variant="outline" className="rounded-full">
+              {isEdit ? "Edit Mode" : "Create Mode"}
+            </Badge>
+          </div>
+
+          <DialogTitle className="mt-3 text-2xl font-bold">
             {isEdit ? "Edit Experience" : "Create Experience"}
           </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Configure the experience, choose where it appears, and save without
+            redeploying.
+          </p>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-          <div className="space-y-2">
-            <Label>Key</Label>
-            <Input
-              value={values.key}
-              onChange={(e) => update("key", e.target.value as any)}
-              placeholder="global_waitlist"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Name</Label>
-            <Input
-              value={values.name}
-              onChange={(e) => update("name", e.target.value as any)}
-              placeholder="Global Waitlist"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Type</Label>
-            <Select
-              value={values.type}
-              onValueChange={(value) => update("type", value as any)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                {EXPERIENCE_TYPE_OPTIONS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Component</Label>
-            <Select
-              value={values.componentKey}
-              onValueChange={(value) => update("componentKey", value as any)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select component" />
-              </SelectTrigger>
-              <SelectContent>
-                {COMPONENT_OPTIONS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Priority</Label>
-            <Input
-              type="number"
-              value={values.priority}
-              onChange={(e) =>
-                update("priority", Number(e.target.value) as any)
-              }
-            />
-          </div>
-
-          <div className="space-y-2 flex items-center justify-between rounded-md border p-3 mt-6">
-            <div>
-              <Label>Enabled</Label>
-              <p className="text-xs text-muted-foreground">
-                Turn this experience on or off.
-              </p>
+        <div className="space-y-6 py-4">
+          <section className="rounded-2xl border p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#D4A017]" />
+              <h3 className="font-semibold">Basics</h3>
             </div>
-            <Switch
-              checked={values.enabled}
-              onCheckedChange={(checked) => update("enabled", checked as any)}
-            />
-          </div>
 
-          <div className="space-y-2">
-            <Label>Target Scope</Label>
-            <Select
-              value={values.target.scope}
-              onValueChange={(value) =>
-                setValues((prev) => ({
-                  ...prev,
-                  target: {
-                    ...prev.target,
-                    scope: value as "global" | "routes",
-                  },
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select scope" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="global">Global</SelectItem>
-                <SelectItem value="routes">Routes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Key</Label>
+                <Input
+                  value={values.key}
+                  onChange={(e) => setField("key", e.target.value as any)}
+                  placeholder="global_waitlist"
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label>Trigger Type</Label>
-            <Select
-              value={values.trigger.type}
-              onValueChange={(value) =>
-                setValues((prev) => ({
-                  ...prev,
-                  trigger: { ...prev.trigger, type: value as any },
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select trigger" />
-              </SelectTrigger>
-              <SelectContent>
-                {TRIGGER_TYPE_OPTIONS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input
+                  value={values.name}
+                  onChange={(e) => setField("name", e.target.value as any)}
+                  placeholder="Global Waitlist"
+                />
+              </div>
 
-          <div className="space-y-2">
-            <Label>Trigger Value</Label>
-            <Input
-              value={values.trigger.value}
-              onChange={(e) =>
-                setValues((prev) => ({
-                  ...prev,
-                  trigger: { ...prev.trigger, value: e.target.value },
-                }))
-              }
-              placeholder="5000 for timer, 50 for scroll"
-            />
-          </div>
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select
+                  value={values.type}
+                  onValueChange={(value) => setField("type", value as any)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXPERIENCE_TYPE_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="space-y-2">
-            <Label>Start At</Label>
-            <Input
-              type="datetime-local"
-              value={values.schedule.startAt}
-              onChange={(e) =>
-                setValues((prev) => ({
-                  ...prev,
-                  schedule: { ...prev.schedule, startAt: e.target.value },
-                }))
-              }
-            />
-          </div>
+              <div className="space-y-2">
+                <Label>Component</Label>
+                <Select
+                  value={values.componentKey}
+                  onValueChange={(value) =>
+                    setField("componentKey", value as any)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select component" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMPONENT_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="space-y-2">
-            <Label>End At</Label>
-            <Input
-              type="datetime-local"
-              value={values.schedule.endAt}
-              onChange={(e) =>
-                setValues((prev) => ({
-                  ...prev,
-                  schedule: { ...prev.schedule, endAt: e.target.value },
-                }))
-              }
-            />
-          </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Input
+                  type="number"
+                  value={values.priority}
+                  onChange={(e) =>
+                    setField("priority", Number(e.target.value) as any)
+                  }
+                />
+              </div>
 
-          <div className="space-y-2 md:col-span-2">
-            <Label>Routes</Label>
-            <Textarea
-              value={values.target.routes.join("\n")}
-              onChange={(e) =>
-                setValues((prev) => ({
-                  ...prev,
-                  target: {
-                    ...prev.target,
-                    routes: e.target.value.split("\n"),
-                  },
-                }))
-              }
-              placeholder="/pricing&#10;/dashboard"
-            />
-          </div>
+              <div className="rounded-xl border bg-muted/30 p-4 flex items-center justify-between">
+                <div>
+                  <Label>Enabled</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Turn this experience on or off.
+                  </p>
+                </div>
+                <Switch
+                  checked={values.enabled}
+                  onCheckedChange={(checked) =>
+                    setField("enabled", checked as any)
+                  }
+                />
+              </div>
+            </div>
+          </section>
 
-          <div className="space-y-2 md:col-span-2">
-            <Label>Excluded Routes</Label>
-            <Textarea
-              value={values.target.excludeRoutes.join("\n")}
-              onChange={(e) =>
-                setValues((prev) => ({
-                  ...prev,
-                  target: {
-                    ...prev.target,
-                    excludeRoutes: e.target.value.split("\n"),
-                  },
-                }))
-              }
-              placeholder="/admin&#10;/api"
-            />
-          </div>
+          <section className="rounded-2xl border p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <Route className="h-4 w-4 text-[#D4A017]" />
+              <h3 className="font-semibold">Targeting</h3>
+            </div>
 
-          <div className="space-y-2">
-            <Label>Title</Label>
-            <Input
-              value={values.payload.title}
-              onChange={(e) =>
-                setValues((prev) => ({
-                  ...prev,
-                  payload: { ...prev.payload, title: e.target.value },
-                }))
-              }
-              placeholder="We are launching soon"
-            />
-          </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Target scope</Label>
+                <Select
+                  value={values.target.scope}
+                  onValueChange={(value) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      target: {
+                        ...prev.target,
+                        scope: value as "global" | "routes",
+                      },
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select scope" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="global">Global</SelectItem>
+                    <SelectItem value="routes">Specific Routes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="space-y-2">
-            <Label>Button Text</Label>
-            <Input
-              value={values.payload.buttonText}
-              onChange={(e) =>
-                setValues((prev) => ({
-                  ...prev,
-                  payload: { ...prev.payload, buttonText: e.target.value },
-                }))
-              }
-              placeholder="Join the waitlist"
-            />
-          </div>
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-[#D4A017]" />
+                  <p className="font-medium">Route rules</p>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Add one route per line. You can also paste comma-separated
+                  routes.
+                </p>
+              </div>
+            </div>
 
-          <div className="space-y-2 md:col-span-2">
-            <Label>Message</Label>
-            <Textarea
-              value={values.payload.message}
-              onChange={(e) =>
-                setValues((prev) => ({
-                  ...prev,
-                  payload: { ...prev.payload, message: e.target.value },
-                }))
-              }
-              placeholder="We are currently under maintenance..."
-            />
-          </div>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Routes</Label>
+                <Textarea
+                  value={values.target.routes.join("\n")}
+                  onChange={(e) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      target: {
+                        ...prev.target,
+                        routes: e.target.value.split("\n"),
+                      },
+                    }))
+                  }
+                  placeholder={routeExamples.routes}
+                  className="min-h-32"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Excluded Routes</Label>
+                <Textarea
+                  value={values.target.excludeRoutes.join("\n")}
+                  onChange={(e) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      target: {
+                        ...prev.target,
+                        excludeRoutes: e.target.value.split("\n"),
+                      },
+                    }))
+                  }
+                  placeholder={routeExamples.excludeRoutes}
+                  className="min-h-32"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <TimerReset className="h-4 w-4 text-[#D4A017]" />
+              <h3 className="font-semibold">Trigger & schedule</h3>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Trigger type</Label>
+                <Select
+                  value={values.trigger.type}
+                  onValueChange={(value) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      trigger: { ...prev.trigger, type: value as any },
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select trigger" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRIGGER_TYPE_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Trigger value</Label>
+                <Input
+                  value={values.trigger.value}
+                  onChange={(e) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      trigger: { ...prev.trigger, value: e.target.value },
+                    }))
+                  }
+                  placeholder="5000 for timer, 50 for scroll"
+                />
+              </div>
+
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex items-center gap-2">
+                  <Layers3 className="h-4 w-4 text-[#D4A017]" />
+                  <p className="font-medium">Schedule</p>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Leave both fields empty to keep it always active when enabled.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Start at</Label>
+                <Input
+                  type="datetime-local"
+                  value={values.schedule.startAt}
+                  onChange={(e) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      schedule: { ...prev.schedule, startAt: e.target.value },
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>End at</Label>
+                <Input
+                  type="datetime-local"
+                  value={values.schedule.endAt}
+                  onChange={(e) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      schedule: { ...prev.schedule, endAt: e.target.value },
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <Layers3 className="h-4 w-4 text-[#D4A017]" />
+              <h3 className="font-semibold">Content</h3>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Title</Label>
+                <Input
+                  value={values.payload.title}
+                  onChange={(e) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      payload: { ...prev.payload, title: e.target.value },
+                    }))
+                  }
+                  placeholder="We are launching soon"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Button text</Label>
+                <Input
+                  value={values.payload.buttonText}
+                  onChange={(e) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      payload: { ...prev.payload, buttonText: e.target.value },
+                    }))
+                  }
+                  placeholder="Join the waitlist"
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Message</Label>
+                <Textarea
+                  value={values.payload.message}
+                  onChange={(e) =>
+                    setValues((prev) => ({
+                      ...prev,
+                      payload: { ...prev.payload, message: e.target.value },
+                    }))
+                  }
+                  placeholder="We are currently under maintenance..."
+                  className="min-h-28"
+                />
+              </div>
+            </div>
+          </section>
         </div>
 
         <DialogFooter>
@@ -434,6 +541,7 @@ export default function ExperienceDialog({
             disabled={loading}
           >
             {loading ? "Saving..." : isEdit ? "Update" : "Create"}
+            {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
           </Button>
         </DialogFooter>
       </DialogContent>

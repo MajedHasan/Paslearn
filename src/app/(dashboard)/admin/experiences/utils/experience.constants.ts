@@ -17,5 +17,6 @@ export const COMPONENT_OPTIONS = [
   { label: "Maintenance V1", value: "maintenance_v1" },
   { label: "Waitlist V1", value: "waitlist_v1" },
   { label: "Coming Soon V1", value: "coming_soon_v1" },
-  { label: "Popup Offer V1", value: "popup_offer_v1" },
+  { label: "Popup V1", value: "popup_v1" },
+  { label: "Banner V1", value: "banner_v1" },
 ] as const;
