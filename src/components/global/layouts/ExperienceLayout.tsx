@@ -1,21 +1,28 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+
+import axios from "axios";
 import { usePathname } from "next/navigation";
+
 import api from "@/lib/api";
-import { Experience } from "@/app/(dashboard)/admin/experiences/utils/experience.types";
+
+import type { Experience } from "@/app/(dashboard)/admin/experiences/utils/experience.types";
 
 import WaitlistPage from "@/components/experiences/WaitlistPage";
+
 import SystemExperience from "@/components/system/SystemExperience";
 
 const EXPERIENCE_COMPONENTS: Record<
   string,
-  React.ComponentType<{ config?: Record<string, any> }>
+  React.ComponentType<{
+    config?: Record<string, any>;
+  }>
 > = {
   waitlist_v1: WaitlistPage,
 };
 
-type SystemState = "loading" | "ready" | "blocked";
+type SystemState = "loading" | "ready" | "offline" | "backend" | "blocked";
 
 export default function ExperienceLayout({
   children,
@@ -25,98 +32,156 @@ export default function ExperienceLayout({
   const pathname = usePathname();
 
   const [experiences, setExperiences] = useState<Experience[]>([]);
+
   const [state, setState] = useState<SystemState>("loading");
 
-  useEffect(() => {
-    let mounted = true;
+  const loadExperiences = useCallback(async () => {
+    setState("loading");
 
-    const load = async () => {
-      try {
-        const res = await api.get("/experiences/public", {
-          timeout: 8000,
-        });
+    try {
+      const response = await api.get("/experiences/public", {
+        timeout: 8000,
+      });
 
-        const data = res?.data?.data ?? res?.data;
+      const data = response?.data?.data ?? response?.data;
 
-        // Invalid response → block
-        if (!Array.isArray(data)) {
-          throw new Error("Invalid experience response");
+      /**
+       * Backend must explicitly return an array.
+       * [] = allow app
+       * Anything else = block
+       */
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid experience payload");
+      }
+
+      setExperiences(data);
+
+      /**
+       * Backend explicitly approved rendering.
+       */
+      setState("ready");
+    } catch (error) {
+      console.error("Experience bootstrap failed:", error);
+
+      /**
+       * Browser offline
+       */
+      if (!navigator.onLine) {
+        setState("offline");
+        return;
+      }
+
+      /**
+       * Axios-specific classification
+       */
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+
+        /**
+         * No response:
+         * timeout / DNS / connection refused
+         */
+        if (!error.response) {
+          setState("offline");
+          return;
         }
 
-        if (!mounted) return;
+        /**
+         * Backend infra failure
+         */
+        if (status && status >= 500) {
+          setState("backend");
+          return;
+        }
 
-        // Backend explicitly responded
-        setExperiences(data);
-
-        // Only now allow app rendering
-        setState("ready");
-      } catch (error) {
-        console.error("Experience check failed:", error);
-
-        if (!mounted) return;
-
-        // Fail closed
+        /**
+         * Unauthorized / bad request /
+         * corrupted response etc
+         */
         setState("blocked");
+        return;
       }
-    };
 
-    load();
-
-    return () => {
-      mounted = false;
-    };
+      /**
+       * Unknown parsing/runtime issue
+       */
+      setState("blocked");
+    }
   }, []);
+
+  useEffect(() => {
+    loadExperiences();
+  }, [loadExperiences]);
 
   const activeExperience = useMemo(() => {
     return experiences
-      .filter((exp) => exp.type === "full_page" && exp.enabled)
+      .filter(
+        (experience) => experience.enabled && experience.type === "full_page",
+      )
       .sort((a, b) => b.priority - a.priority)
-      .find((exp) => {
-        const isGlobal = exp.target?.scope === "global";
+      .find((experience) => {
+        const isGlobal = experience.target?.scope === "global";
 
-        const matchRoute = exp.target?.routes?.includes(pathname);
+        const routeMatched = experience.target?.routes?.includes(pathname);
 
-        const excluded = exp.target?.excludeRoutes?.includes(pathname);
+        const excluded = experience.target?.excludeRoutes?.includes(pathname);
 
-        if (excluded) return false;
+        if (excluded) {
+          return false;
+        }
 
-        return isGlobal || matchRoute;
+        return isGlobal || routeMatched;
       });
   }, [experiences, pathname]);
 
-  // Still checking backend
+  /**
+   * Loading state
+   */
   if (state === "loading") {
     return <SystemExperience variant="loading" />;
   }
 
-  // Network error / timeout / malformed response
-  // Never expose app
-  if (state === "blocked") {
-    return (
-      <SystemExperience
-        variant="offline"
-        onRetry={() => window.location.reload()}
-      />
-    );
+  /**
+   * User connectivity issue
+   */
+  if (state === "offline") {
+    return <SystemExperience variant="offline" onRetry={loadExperiences} />;
   }
 
-  // Active system experience
+  /**
+   * Backend/server issue
+   */
+  if (state === "backend") {
+    return <SystemExperience variant="backend" onRetry={loadExperiences} />;
+  }
+
+  /**
+   * Payload/security issue
+   */
+  if (state === "blocked") {
+    return <SystemExperience variant="blocked" onRetry={loadExperiences} />;
+  }
+
+  /**
+   * Active system experience
+   */
   if (activeExperience) {
     const Component = EXPERIENCE_COMPONENTS[activeExperience.componentKey];
 
-    if (Component) {
-      return <Component config={activeExperience.payload} />;
+    /**
+     * Unknown component registration
+     * Safer to block.
+     */
+    if (!Component) {
+      return <SystemExperience variant="blocked" onRetry={loadExperiences} />;
     }
 
-    // Unknown component → safer to block
-    return (
-      <SystemExperience
-        variant="backend"
-        onRetry={() => window.location.reload()}
-      />
-    );
+    return <Component config={activeExperience.payload} />;
   }
 
-  // Backend explicitly returned []
+  /**
+   * Backend explicitly returned []
+   * Safe to render app
+   */
   return <>{children}</>;
 }
