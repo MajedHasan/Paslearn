@@ -16,7 +16,6 @@ export default function ExperiencesPage() {
       setLoading(true);
       const res = await api.get("/experiences/admin");
 
-      // adjust this if your api wrapper returns data differently
       setExperiences(res?.data?.data || res?.data || []);
     } catch (error: any) {
       toast.error(
@@ -37,8 +36,8 @@ export default function ExperiencesPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#101828]">Experiences</h1>
           <p className="text-sm text-muted-foreground">
-            Manage maintenance, waitlist, coming soon, popups, and future
-            builder-based experiences.
+            Manage maintenance, waitlist, coming soon, popup, banner, and
+            modular experiences.
           </p>
         </div>
       </div>
@@ -48,8 +47,8 @@ export default function ExperiencesPage() {
           <CardTitle className="text-base">Runtime Control</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Use this panel to enable or disable full-page experiences and popup
-          experiences without redeploying.
+          Use this panel to enable or disable experiences and attach modules
+          like forms or automations without redeploying.
         </CardContent>
       </Card>
 

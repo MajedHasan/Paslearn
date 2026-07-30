@@ -70,6 +70,7 @@ export default function ExperienceTable({ experiences, reload }: Props) {
                 <TableHead>Key</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Component</TableHead>
+                <TableHead>Modules</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -79,7 +80,7 @@ export default function ExperienceTable({ experiences, reload }: Props) {
               {experiences.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="text-center py-10 text-muted-foreground"
                   >
                     No experiences found.
@@ -94,6 +95,24 @@ export default function ExperienceTable({ experiences, reload }: Props) {
                       <Badge variant="outline">{item.type}</Badge>
                     </TableCell>
                     <TableCell>{item.componentKey}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        {item.modules?.length ? (
+                          item.modules.map((module, index) => (
+                            <Badge
+                              key={`${module.key}-${index}`}
+                              variant="secondary"
+                            >
+                              {module.type}:{module.key}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            None
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{item.priority}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">

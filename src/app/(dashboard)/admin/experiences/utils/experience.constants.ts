@@ -19,4 +19,12 @@ export const COMPONENT_OPTIONS = [
   { label: "Coming Soon V1", value: "coming_soon_v1" },
   { label: "Popup V1", value: "popup_v1" },
   { label: "Banner V1", value: "banner_v1" },
+  { label: "Dynamic Form V1", value: "dynamic_form_v1" },
+] as const;
+
+export const MODULE_TYPE_OPTIONS = [
+  { label: "Form", value: "form" },
+  { label: "Action", value: "action" },
+  { label: "Automation", value: "automation" },
+  { label: "Tracking", value: "tracking" },
 ] as const;

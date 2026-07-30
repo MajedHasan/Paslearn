@@ -1,9 +1,47 @@
+"use client";
+
 import TeacherSidebar from "@/components/global/sidebar/teacher-sidebar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import api from "@/lib/api";
 import { BarChart, Bell, CalendarDays, Settings } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 const TeacherLayout = ({ children }: { children: React.ReactNode }) => {
+
+  const [teacherProfile, setTeacherProfile] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [greetings, setGreetings] = useState<string>("");
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      setGreetings("Good Morning");
+    } else if (hour < 18) {
+      setGreetings("Good Afternoon");
+    } else {
+      setGreetings("Good Evening");
+    }
+  }, []);
+
+  const fetchTeacherProfile = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get("/teacher-profile");
+      console.log("Fetched teacher profile:", response.data.data);
+      setTeacherProfile(response.data.data);
+    } catch (error) {
+      console.error("Error fetching teacher profile:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTeacherProfile();
+  }, []);
+
   return (
     <>
       <main className="w-full min-h-screen h-full bg-[#F0F2F5] flex">
@@ -22,8 +60,8 @@ const TeacherLayout = ({ children }: { children: React.ReactNode }) => {
                 </SheetContent>
               </Sheet>
               <div>
-                <h2 className="font-bold text-xl">Good Morning,</h2>
-                <p className="text-xs">Mr. ABC</p>
+                <h2 className="font-bold text-xl">{greetings}</h2>
+                <p className="text-xs">{teacherProfile?.name || "Guest"}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -34,11 +72,14 @@ const TeacherLayout = ({ children }: { children: React.ReactNode }) => {
                 <Settings className="text-[#8B8C8C]" />
               </Link>
               <div className="pl-4">
-                <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="text-sm">Today,</span>
-                  <CalendarDays />
+                  <CalendarDays size={20}/>
                 </div>
-                <div className="text-lg font-bold">8 feb, 2024</div>
+                <div className="text-xs font-bold">
+                  {/* 8 feb, 2024 */}
+                  {new Date().toDateString()}
+                </div>
               </div>
             </div>
           </div>

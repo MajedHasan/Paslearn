@@ -30,7 +30,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <div className="flex-1 max-h-full overflow-y-scroll px-5 py-2">
             <div className="flex items-center justify-between flex-col sm:flex-row mb-4">
               <h1 className="xl:text-2xl text-xl font-semibold">
-                Dashboard view
+                Dashboard view 
+                {/* Page Name Needs to Show */}
               </h1>
               <div className="flex items-center gap-2">
                 <Button

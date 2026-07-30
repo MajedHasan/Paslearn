@@ -34,6 +34,7 @@ import {
   TicketPercent,
   Palette,
   UsersRound,
+  Blocks,
 } from "lucide-react";
 import { SidebarItem } from "./types";
 
@@ -52,6 +53,11 @@ export const AdminSidebarItems: SidebarItem[] = [
     name: "Plans & Pricing",
     url: "/plans-pricing",
     icon: BetweenHorizonalEndIcon,
+  },
+  {
+    name: "Theme Builder",
+    url: "/theme-builder",
+    icon: LayoutGrid,
   },
   {
     name: "Support",
@@ -82,6 +88,16 @@ export const AdminSidebarItems: SidebarItem[] = [
     name: "Sales Page Builder",
     url: "/sales-page",
     icon: Magnet,
+  },
+  {
+    name: "Form Builder",
+    url: "/forms",
+    icon: Blocks,
+  },
+  {
+    name: "Form Submission",
+    url: "/submissions",
+    icon: Blocks,
   },
   {
     name: "Email Marketing",

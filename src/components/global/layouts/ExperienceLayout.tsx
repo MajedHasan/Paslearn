@@ -10,6 +10,7 @@ import type { Experience } from "@/app/(dashboard)/admin/experiences/utils/exper
 import WaitlistPage from "@/components/experiences/WaitlistPage";
 import PopupExperience from "@/components/experiences/PopupExperience";
 import BannerExperience from "@/components/experiences/BannerExperience";
+import DynamicFormExperience from "@/components/experiences/DynamicFormExperience";
 import SystemExperience from "@/components/system/SystemExperience";
 
 const COMPONENTS: Record<
@@ -19,9 +20,71 @@ const COMPONENTS: Record<
   waitlist_v1: WaitlistPage,
   popup_v1: PopupExperience,
   banner_v1: BannerExperience,
+  dynamic_form_v1: DynamicFormExperience,
 };
 
 type SystemState = "loading" | "ready" | "offline" | "backend" | "blocked";
+
+function getFormResourceKey(experience: Experience): string {
+  console.log(
+    "formModule: ",
+    experience.modules?.find((m) => m.type === "form"),
+  );
+
+  const formModule = experience.modules?.find(
+    (module) => module.type === "form",
+  );
+
+  const raw =
+    formModule?.config?.resourceKey ??
+    formModule?.config?.formKey ??
+    formModule?.config?.formId ??
+    formModule?.config?.key ??
+    formModule?.key ??
+    experience.payload?.resourceKey ??
+    experience.payload?.formKey ??
+    experience.payload?.formId ??
+    experience.payload?.key;
+
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+function isValidDateValue(value?: string) {
+  if (!value) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime());
+}
+
+function shouldRenderExperienceOnRoute(
+  experience: Experience,
+  pathname: string,
+) {
+  const excluded = experience.target?.excludeRoutes?.includes(pathname);
+  if (excluded) return false;
+
+  if (experience.target?.scope === "global") {
+    return true;
+  }
+
+  return experience.target?.routes?.includes(pathname) ?? false;
+}
+
+function isExperienceWithinSchedule(experience: Experience) {
+  const now = new Date();
+
+  const startAt = isValidDateValue(experience.schedule?.startAt)
+    ? new Date(experience.schedule!.startAt!)
+    : null;
+
+  const endAt = isValidDateValue(experience.schedule?.endAt)
+    ? new Date(experience.schedule!.endAt!)
+    : null;
+
+  if (startAt && now < startAt) return false;
+  if (endAt && now > endAt) return false;
+
+  return true;
+}
 
 export default function ExperienceLayout({
   children,
@@ -31,17 +94,10 @@ export default function ExperienceLayout({
   const pathname = usePathname();
 
   const [state, setState] = useState<SystemState>("loading");
-
   const [experiences, setExperiences] = useState<Experience[]>([]);
-
   const [activePopupIds, setActivePopupIds] = useState<string[]>([]);
   const [activeBannerIds, setActiveBannerIds] = useState<string[]>([]);
 
-  /*
-  ==========================================
-  FETCH
-  ==========================================
-  */
   const loadExperiences = useCallback(async () => {
     setState("loading");
 
@@ -62,16 +118,19 @@ export default function ExperienceLayout({
       console.error(error);
 
       if (!navigator.onLine) {
-        return setState("offline");
+        setState("offline");
+        return;
       }
 
       if (axios.isAxiosError(error)) {
         if (!error.response) {
-          return setState("offline");
+          setState("offline");
+          return;
         }
 
         if (error.response.status >= 500) {
-          return setState("backend");
+          setState("backend");
+          return;
         }
       }
 
@@ -83,96 +142,66 @@ export default function ExperienceLayout({
     loadExperiences();
   }, [loadExperiences]);
 
-  /*
-  ==========================================
-  HELPERS
-  ==========================================
-  */
-  const isRouteMatched = useCallback(
-    (experience: Experience) => {
-      const excluded = experience.target?.excludeRoutes?.includes(pathname);
-
-      if (excluded) return false;
-
-      if (experience.target?.scope === "global") {
-        return true;
-      }
-
-      return experience.target?.routes?.includes(pathname);
-    },
-    [pathname],
-  );
-
-  const isScheduleValid = (experience: Experience) => {
-    const now = new Date();
-
-    const startAt = experience.schedule?.startAt
-      ? new Date(experience.schedule.startAt)
-      : null;
-
-    const endAt = experience.schedule?.endAt
-      ? new Date(experience.schedule.endAt)
-      : null;
-
-    if (startAt && now < startAt) return false;
-
-    if (endAt && now > endAt) return false;
-
-    return true;
-  };
-
   const availableExperiences = useMemo(() => {
     return experiences
       .filter((exp) => exp.enabled)
-      .filter(isRouteMatched)
-      .filter(isScheduleValid)
+      .filter((exp) => shouldRenderExperienceOnRoute(exp, pathname))
+      .filter(isExperienceWithinSchedule)
       .sort((a, b) => b.priority - a.priority);
-  }, [experiences, isRouteMatched]);
+  }, [experiences, pathname]);
 
-  /*
-  ==========================================
-  FULL PAGE
-  ==========================================
-  */
   const fullPageExperience = useMemo(() => {
     return availableExperiences.find((exp) => exp.type === "full_page");
   }, [availableExperiences]);
 
-  /*
-  ==========================================
-  REDIRECT
-  ==========================================
-  */
-  useEffect(() => {
-    const redirectExperience: any = availableExperiences.find(
-      (exp) => exp.type === "redirect",
-    );
+  const renderExperience = useCallback((experience: Experience) => {
+    const Component = COMPONENTS[experience.componentKey];
 
-    if (!redirectExperience?.payload?.url) return;
+    if (!Component) {
+      return null;
+    }
 
-    const delay = Number(redirectExperience.trigger?.value) || 0;
+    // Dynamic form is a standalone renderer, not embedded into other shells.
+    if (experience.componentKey === "dynamic_form_v1") {
+      const formResourceKey = getFormResourceKey(experience);
 
-    const timer = setTimeout(() => {
-      window.location.href = redirectExperience.payload.url;
-    }, delay);
+      console.log("Component: ", formResourceKey);
 
-    return () => clearTimeout(timer);
-  }, [availableExperiences]);
+      if (!formResourceKey) {
+        return null;
+      }
 
-  /*
-  ==========================================
-  POPUPS + BANNERS TRIGGERS
-  ==========================================
-  */
+      return (
+        <DynamicFormExperience
+          key={experience._id}
+          config={{
+            resourceKey: formResourceKey,
+            embedded: experience.type !== "full_page",
+          }}
+        />
+      );
+    }
+
+    return <Component key={experience._id} config={experience.payload ?? {}} />;
+  }, []);
+
   useEffect(() => {
     if (!availableExperiences.length) return;
 
-    const timers: NodeJS.Timeout[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    const activatePopup = (id: string) => {
+      setActivePopupIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    };
+
+    const activateBanner = (id: string) => {
+      setActiveBannerIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    };
 
     const onScroll = () => {
+      const totalHeight = document.body.scrollHeight - window.innerHeight;
       const scrollPercent =
-        (window.scrollY / (document.body.scrollHeight - window.innerHeight)) *
-        100;
+        totalHeight > 0 ? (window.scrollY / totalHeight) * 100 : 0;
 
       availableExperiences.forEach((exp) => {
         if (exp.trigger?.type !== "scroll") return;
@@ -182,15 +211,11 @@ export default function ExperienceLayout({
         if (scrollPercent < target) return;
 
         if (exp.type === "popup") {
-          setActivePopupIds((prev) =>
-            prev.includes(exp._id) ? prev : [...prev, exp._id],
-          );
+          activatePopup(exp._id);
         }
 
         if (exp.type === "banner") {
-          setActiveBannerIds((prev) =>
-            prev.includes(exp._id) ? prev : [...prev, exp._id],
-          );
+          activateBanner(exp._id);
         }
       });
     };
@@ -202,9 +227,7 @@ export default function ExperienceLayout({
         if (exp.trigger?.type !== "exit_intent") return;
 
         if (exp.type === "popup") {
-          setActivePopupIds((prev) =>
-            prev.includes(exp._id) ? prev : [...prev, exp._id],
-          );
+          activatePopup(exp._id);
         }
       });
     };
@@ -214,15 +237,11 @@ export default function ExperienceLayout({
 
       if (triggerType === "always") {
         if (exp.type === "popup") {
-          setActivePopupIds((prev) =>
-            prev.includes(exp._id) ? prev : [...prev, exp._id],
-          );
+          activatePopup(exp._id);
         }
 
         if (exp.type === "banner") {
-          setActiveBannerIds((prev) =>
-            prev.includes(exp._id) ? prev : [...prev, exp._id],
-          );
+          activateBanner(exp._id);
         }
       }
 
@@ -231,15 +250,11 @@ export default function ExperienceLayout({
 
         const timer = setTimeout(() => {
           if (exp.type === "popup") {
-            setActivePopupIds((prev) =>
-              prev.includes(exp._id) ? prev : [...prev, exp._id],
-            );
+            activatePopup(exp._id);
           }
 
           if (exp.type === "banner") {
-            setActiveBannerIds((prev) =>
-              prev.includes(exp._id) ? prev : [...prev, exp._id],
-            );
+            activateBanner(exp._id);
           }
         }, delay);
 
@@ -252,17 +267,11 @@ export default function ExperienceLayout({
 
     return () => {
       timers.forEach(clearTimeout);
-
       window.removeEventListener("scroll", onScroll);
       document.removeEventListener("mouseleave", onExitIntent);
     };
   }, [availableExperiences]);
 
-  /*
-  ==========================================
-  STATES
-  ==========================================
-  */
   if (state === "loading") {
     return <SystemExperience variant="loading" />;
   }
@@ -279,39 +288,23 @@ export default function ExperienceLayout({
     return <SystemExperience variant="blocked" onRetry={loadExperiences} />;
   }
 
-  /*
-  ==========================================
-  FULL PAGE OVERRIDE
-  ==========================================
-  */
   if (fullPageExperience) {
-    const Component = COMPONENTS[fullPageExperience.componentKey];
+    const rendered = renderExperience(fullPageExperience);
 
-    if (!Component) {
+    if (!rendered) {
       return <SystemExperience variant="blocked" onRetry={loadExperiences} />;
     }
 
-    return <Component config={fullPageExperience.payload} />;
+    return rendered;
   }
 
-  /*
-  ==========================================
-  NORMAL APP
-  ==========================================
-  */
   return (
     <>
       {availableExperiences
         .filter(
           (exp) => exp.type === "banner" && activeBannerIds.includes(exp._id),
         )
-        .map((exp) => {
-          const Component = COMPONENTS[exp.componentKey];
-
-          if (!Component) return null;
-
-          return <Component key={exp._id} config={exp.payload} />;
-        })}
+        .map((exp) => renderExperience(exp))}
 
       {children}
 
@@ -319,13 +312,7 @@ export default function ExperienceLayout({
         .filter(
           (exp) => exp.type === "popup" && activePopupIds.includes(exp._id),
         )
-        .map((exp) => {
-          const Component = COMPONENTS[exp.componentKey];
-
-          if (!Component) return null;
-
-          return <Component key={exp._id} config={exp.payload} />;
-        })}
+        .map((exp) => renderExperience(exp))}
     </>
   );
 }

@@ -9,6 +9,18 @@ export type TriggerType =
 
 export type TargetScope = "global" | "routes";
 
+export type ExperienceModuleType =
+  | "form"
+  | "action"
+  | "automation"
+  | "tracking";
+
+export interface ExperienceModule {
+  type: ExperienceModuleType;
+  key: string;
+  config: Record<string, any>;
+}
+
 export interface Experience {
   _id: string;
   key: string;
@@ -30,9 +42,16 @@ export interface Experience {
     startAt?: string;
     endAt?: string;
   };
+  modules?: ExperienceModule[];
   payload?: Record<string, any>;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface ExperienceModuleFormValue {
+  type: ExperienceModuleType;
+  key: string;
+  configText: string;
 }
 
 export interface ExperienceFormValues {
@@ -55,6 +74,7 @@ export interface ExperienceFormValues {
     startAt: string;
     endAt: string;
   };
+  modules: ExperienceModuleFormValue[];
   payload: {
     title: string;
     message: string;

@@ -101,6 +101,8 @@ export default function WaitlistPage({
         shouldValidate: true,
       });
     }
+
+    console.log("Config: ", config);
   }, [role, form]);
 
   const onSubmit = async (values: WaitlistFormValues) => {
@@ -130,6 +132,7 @@ export default function WaitlistPage({
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-slate-50">
       {/* Living background */}
+
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.035)_1px,transparent_1px)] bg-[size:28px_28px]" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/70 via-slate-50/40 to-slate-100/80" />
 

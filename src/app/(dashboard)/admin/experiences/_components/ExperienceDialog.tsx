@@ -31,12 +31,15 @@ import {
   Shield,
   TimerReset,
   Layers3,
+  Trash2,
+  Plus,
 } from "lucide-react";
 
 import { Experience, ExperienceFormValues } from "../utils/experience.types";
 import {
   COMPONENT_OPTIONS,
   EXPERIENCE_TYPE_OPTIONS,
+  MODULE_TYPE_OPTIONS,
   TRIGGER_TYPE_OPTIONS,
 } from "../utils/experience.constants";
 
@@ -66,6 +69,7 @@ const emptyValues: ExperienceFormValues = {
     startAt: "",
     endAt: "",
   },
+  modules: [],
   payload: {
     title: "",
     message: "",
@@ -89,6 +93,23 @@ function toArray(value: string) {
 
 function formatDateTime(value?: string) {
   return value ? String(value).slice(0, 16) : "";
+}
+
+function safeJsonStringify(value: any) {
+  try {
+    return JSON.stringify(value ?? {}, null, 2);
+  } catch {
+    return "{}";
+  }
+}
+
+function parseJsonConfig(text: string) {
+  if (!text.trim()) return {};
+  const parsed = JSON.parse(text);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Module config must be a JSON object");
+  }
+  return parsed;
 }
 
 export default function ExperienceDialog({
@@ -126,6 +147,12 @@ export default function ExperienceDialog({
         startAt: formatDateTime(experience.schedule?.startAt),
         endAt: formatDateTime(experience.schedule?.endAt),
       },
+      modules:
+        experience.modules?.map((module) => ({
+          type: module.type,
+          key: module.key,
+          configText: safeJsonStringify(module.config),
+        })) ?? [],
       payload: {
         title: experience.payload?.title ?? "",
         message: experience.payload?.message ?? "",
@@ -145,12 +172,63 @@ export default function ExperienceDialog({
     setValues((prev) => ({ ...prev, [key]: value }));
   };
 
+  const addModule = () => {
+    setValues((prev) => ({
+      ...prev,
+      modules: [
+        ...prev.modules,
+        {
+          type: "form",
+          key: `module_${Date.now()}`,
+          configText: "{}",
+        },
+      ],
+    }));
+  };
+
+  const updateModule = (
+    index: number,
+    patch: Partial<ExperienceFormValues["modules"][number]>,
+  ) => {
+    setValues((prev) => {
+      const modules = [...prev.modules];
+      modules[index] = { ...modules[index], ...patch };
+      return { ...prev, modules };
+    });
+  };
+
+  const removeModule = (index: number) => {
+    setValues((prev) => ({
+      ...prev,
+      modules: prev.modules.filter((_, i) => i !== index),
+    }));
+  };
+
   const submit = async () => {
     try {
       setLoading(true);
 
+      const modules = values.modules.map((module, index) => {
+        let config: Record<string, any> = {};
+
+        try {
+          config = parseJsonConfig(module.configText);
+        } catch (error: any) {
+          throw new Error(
+            `Invalid JSON in module #${index + 1} (${module.key}): ${error.message}`,
+          );
+        }
+
+        return {
+          type: module.type,
+          key: module.key.trim(),
+          config,
+        };
+      });
+
       const payload = {
         ...values,
+        modules,
         target: {
           scope: values.target.scope,
           routes: toArray(values.target.routes.join("\n")),
@@ -180,7 +258,11 @@ export default function ExperienceDialog({
       setOpen(false);
       onSaved();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Something went wrong");
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Something went wrong",
+      );
     } finally {
       setLoading(false);
     }
@@ -210,7 +292,7 @@ export default function ExperienceDialog({
             {isEdit ? "Edit Experience" : "Create Experience"}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Configure the experience, choose where it appears, and save without
+            Configure the experience, attach modules, and save without
             redeploying.
           </p>
         </DialogHeader>
@@ -475,6 +557,104 @@ export default function ExperienceDialog({
                   }
                 />
               </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <Layers3 className="h-4 w-4 text-[#D4A017]" />
+              <h3 className="font-semibold">Modules</h3>
+            </div>
+
+            <p className="mb-4 text-sm text-muted-foreground">
+              Attach form, automation, tracking, or action modules to this
+              experience.
+            </p>
+
+            <div className="space-y-4">
+              {values.modules.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-muted-foreground">
+                  No modules added yet.
+                </div>
+              ) : null}
+
+              {values.modules.map((module, index) => (
+                <div
+                  key={`${module.key}-${index}`}
+                  className="rounded-3xl border p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="font-semibold text-slate-900">
+                      Module #{index + 1}
+                    </h4>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeModule(index)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Module type</Label>
+                      <Select
+                        value={module.type}
+                        onValueChange={(value) =>
+                          updateModule(index, { type: value as any })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select module type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MODULE_TYPE_OPTIONS.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Module key</Label>
+                      <Input
+                        value={module.key}
+                        onChange={(e) =>
+                          updateModule(index, { key: e.target.value })
+                        }
+                        placeholder="teacher_form"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <Label>Config JSON</Label>
+                    <Textarea
+                      value={module.configText}
+                      onChange={(e) =>
+                        updateModule(index, { configText: e.target.value })
+                      }
+                      className="min-h-40 font-mono text-xs"
+                      placeholder='{"formKey":"teacher_onboarding_form"}'
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Must be valid JSON object.
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4">
+              <Button type="button" variant="outline" onClick={addModule}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Module
+              </Button>
             </div>
           </section>
 
