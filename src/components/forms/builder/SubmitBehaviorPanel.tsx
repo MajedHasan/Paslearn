@@ -11,10 +11,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Send, Clock, Palette } from "lucide-react";
+import {
+  Sparkles,
+  Send,
+  Clock,
+  Palette,
+  MousePointerClick,
+  CornerDownRight,
+  LayoutTemplate,
+  Code2,
+  Eye,
+} from "lucide-react";
 
 interface SubmitAction {
   type: "message" | "redirect" | "message_then_redirect";
@@ -71,11 +80,15 @@ export default function SubmitBehaviorPanel({
     onChange(submitAction, { ...meta, ...patch });
   };
 
+  // Choose a preview accent (fallback to gold)
+  const accentColor = meta.theme?.accent || "#D4A017";
+  const radiusStyle = meta.theme?.radius || "0.5rem";
+
   return (
-    <div className="space-y-6">
-      {/* Submit Action */}
-      <div className="rounded-3xl border bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-semibold uppercase text-muted-foreground mb-6">
+    <div className="rounded-3xl border bg-white shadow-sm divide-y divide-slate-100">
+      {/* Submit Action Section */}
+      <div className="p-6 space-y-5">
+        <div className="flex items-center gap-2 text-sm font-semibold uppercase text-muted-foreground">
           <Send className="h-4 w-4 text-amber-500" />
           Submit Action
         </div>
@@ -127,10 +140,12 @@ export default function SubmitBehaviorPanel({
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Delay (ms)</Label>
-                  <span className="text-xs text-muted-foreground">
+                  <Label className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" /> Delay (ms)
+                  </Label>
+                  <Badge variant="outline" className="text-xs font-mono">
                     {submitAction.delayMs ?? 0} ms
-                  </span>
+                  </Badge>
                 </div>
                 <Slider
                   value={[submitAction.delayMs ?? 0]}
@@ -145,13 +160,11 @@ export default function SubmitBehaviorPanel({
         </div>
       </div>
 
-      {/* Meta */}
-      <div className="rounded-3xl border bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-semibold uppercase text-muted-foreground mb-6">
-          <Badge variant="outline" className="gap-1">
-            <Sparkles className="h-4 w-4 text-amber-500" />
-            Form Meta
-          </Badge>
+      {/* Form Meta Section */}
+      <div className="p-6 space-y-5">
+        <div className="flex items-center gap-2 text-sm font-semibold uppercase text-muted-foreground">
+          <LayoutTemplate className="h-4 w-4 text-amber-500" />
+          Form Meta
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -180,11 +193,28 @@ export default function SubmitBehaviorPanel({
             />
           </div>
         </div>
+
+        {/* Live Submit Button Preview */}
+        <div className="flex flex-col items-center p-4 border rounded-2xl bg-slate-50/50">
+          <span className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+            <Eye className="h-3 w-3" /> Button Preview
+          </span>
+          <button
+            type="button"
+            className="px-6 py-2.5 font-semibold text-white shadow-lg transition-all hover:shadow-xl cursor-default"
+            style={{
+              backgroundColor: accentColor,
+              borderRadius: radiusStyle,
+            }}
+          >
+            {meta.submitButtonText || "Submit"}
+          </button>
+        </div>
       </div>
 
-      {/* Theme */}
-      <div className="rounded-3xl border bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-semibold uppercase text-muted-foreground mb-6">
+      {/* Theme Section */}
+      <div className="p-6 space-y-5">
+        <div className="flex items-center gap-2 text-sm font-semibold uppercase text-muted-foreground">
           <Palette className="h-4 w-4 text-amber-500" />
           Theme
         </div>
@@ -192,7 +222,7 @@ export default function SubmitBehaviorPanel({
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
             <Label>Accent Color</Label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {ACCENT_COLORS.map((color) => (
                 <button
                   key={color}
@@ -213,7 +243,7 @@ export default function SubmitBehaviorPanel({
               <div className="flex items-center">
                 <Input
                   type="color"
-                  value={meta.theme?.accent || "#D4A017"}
+                  value={accentColor}
                   onChange={(e) =>
                     updateMeta({
                       theme: { ...meta.theme, accent: e.target.value },
@@ -228,7 +258,7 @@ export default function SubmitBehaviorPanel({
           <div className="space-y-2">
             <Label>Border Radius</Label>
             <Select
-              value={meta.theme?.radius || "0.5rem"}
+              value={radiusStyle}
               onValueChange={(value) =>
                 updateMeta({
                   theme: { ...meta.theme, radius: value },
@@ -250,10 +280,10 @@ export default function SubmitBehaviorPanel({
         </div>
       </div>
 
-      {/* Custom CSS */}
-      <div className="rounded-3xl border bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-semibold uppercase text-muted-foreground mb-6">
-          <Palette className="h-4 w-4 text-amber-500" />
+      {/* Custom CSS Section */}
+      <div className="p-6 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-semibold uppercase text-muted-foreground">
+          <Code2 className="h-4 w-4 text-amber-500" />
           Custom CSS
         </div>
         <div className="space-y-2">
@@ -262,7 +292,7 @@ export default function SubmitBehaviorPanel({
             value={meta.customCSS || ""}
             onChange={(e) => updateMeta({ customCSS: e.target.value })}
             className="min-h-32 font-mono text-sm"
-            placeholder=".form-wrapper { ... }"
+            placeholder=".form-wrapper { background: #f9f9f9; }"
           />
         </div>
       </div>

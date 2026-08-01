@@ -26,6 +26,8 @@ import {
   File,
   Star,
   CalendarRange,
+  X,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,13 +40,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { FieldDefinition, FieldType } from "@/types/forms/shared/field.types";
 
 interface Props {
@@ -93,7 +89,22 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
       width: "full",
     };
     onChange([...fields, newField]);
-    setExpandedIndex(fields.length); // expand the new field
+    setExpandedIndex(fields.length);
+  };
+
+  const duplicateField = (index: number) => {
+    const original = fields[index];
+    const duplicated: FieldDefinition = {
+      ...original,
+      key: `field_${createId()}`,
+      name: `field_${createId()}`,
+      label: `${original.label} (copy)`,
+      options: original.options ? [...original.options] : undefined,
+    };
+    const updated = [...fields];
+    updated.splice(index + 1, 0, duplicated);
+    onChange(updated);
+    setExpandedIndex(index + 1);
   };
 
   const updateField = (index: number, patch: Partial<FieldDefinition>) => {
@@ -122,6 +133,32 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
     setShowAdvanced((prev) => ({ ...prev, [index]: !prev[index] }));
   };
 
+  // Options helpers
+  const addOption = (fieldIndex: number) => {
+    const options = fields[fieldIndex].options || [];
+    const newOption = {
+      label: `Option ${options.length + 1}`,
+      value: `option_${options.length + 1}`,
+    };
+    updateField(fieldIndex, { options: [...options, newOption] });
+  };
+
+  const updateOption = (
+    fieldIndex: number,
+    optIndex: number,
+    patch: Partial<{ label: string; value: string }>
+  ) => {
+    const options = [...(fields[fieldIndex].options || [])];
+    options[optIndex] = { ...options[optIndex], ...patch };
+    updateField(fieldIndex, { options });
+  };
+
+  const removeOption = (fieldIndex: number, optIndex: number) => {
+    const options =
+      fields[fieldIndex].options?.filter((_, i) => i !== optIndex) || [];
+    updateField(fieldIndex, { options });
+  };
+
   return (
     <div className="rounded-3xl border bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between mb-6">
@@ -134,10 +171,10 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
 
       {fields.length === 0 && (
         <div className="text-center text-muted-foreground py-12 border-2 border-dashed rounded-2xl bg-slate-50/50">
-            <Type className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">
-                {`No fields yet. Click "Add Field" to start building your form.`}
-            </p>
+          <Type className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">
+            {`No fields yet. Click "Add Field" to start building your form.`}
+          </p>
         </div>
       )}
 
@@ -145,15 +182,20 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
         {fields.map((field, index) => {
           const isExpanded = expandedIndex === index;
           const typeMeta = FIELD_TYPE_META[field.type] || FIELD_TYPE_META.text;
+          const needOptions = ["select", "radio", "multiselect"].includes(
+            field.type
+          );
 
           return (
             <div
               key={field.key}
               className={`rounded-2xl border transition-all duration-200 ${
-                isExpanded ? "bg-white shadow-md border-amber-200" : "bg-slate-50/50 border-slate-200 hover:border-slate-300"
+                isExpanded
+                  ? "bg-white shadow-lg border-amber-300 ring-1 ring-amber-100"
+                  : "bg-slate-50/50 border-slate-200 hover:border-slate-300 hover:shadow-sm"
               }`}
             >
-              {/* Header (always visible) */}
+              {/* Header */}
               <div
                 className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none"
                 onClick={() => setExpandedIndex(isExpanded ? null : index)}
@@ -176,15 +218,33 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
 
                 <div className="flex items-center gap-1">
                   {field.validation?.required && (
-                    <Badge variant="outline" className="text-xs text-red-500 border-red-200">
+                    <Badge
+                      variant="outline"
+                      className="text-xs text-red-500 border-red-200"
+                    >
                       Required
                     </Badge>
                   )}
                   {field.hidden && (
-                    <Badge variant="outline" className="text-xs text-gray-500 border-gray-200">
+                    <Badge
+                      variant="outline"
+                      className="text-xs text-gray-500 border-gray-200"
+                    >
                       Hidden
                     </Badge>
                   )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      duplicateField(index);
+                    }}
+                    title="Duplicate field"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -228,16 +288,17 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
                 </div>
               </div>
 
-              {/* Expanded content */}
+              {/* Expanded Content */}
               {isExpanded && (
                 <div className="px-4 pb-4 space-y-4 animate-in slide-in-from-top-2">
-                  {/* Label & Type */}
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Label</Label>
                       <Input
                         value={field.label}
-                        onChange={(e) => updateField(index, { label: e.target.value })}
+                        onChange={(e) =>
+                          updateField(index, { label: e.target.value })
+                        }
                         placeholder="Field label"
                       />
                     </div>
@@ -245,49 +306,57 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
                       <Label>Type</Label>
                       <Select
                         value={field.type}
-                        onValueChange={(v) => updateField(index, { type: v as FieldType })}
+                        onValueChange={(v) =>
+                          updateField(index, { type: v as FieldType })
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(FIELD_TYPE_META).map(([key, meta]) => (
-                            <SelectItem key={key} value={key}>
-                              <span className="flex items-center gap-2">
-                                {meta.icon} {meta.label}
-                              </span>
-                            </SelectItem>
-                          ))}
+                          {Object.entries(FIELD_TYPE_META).map(
+                            ([key, meta]) => (
+                              <SelectItem key={key} value={key}>
+                                <span className="flex items-center gap-2">
+                                  {meta.icon} {meta.label}
+                                </span>
+                              </SelectItem>
+                            )
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
 
-                  {/* Placeholder & Help Text */}
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Placeholder</Label>
                       <Input
                         value={field.placeholder || ""}
-                        onChange={(e) => updateField(index, { placeholder: e.target.value })}
+                        onChange={(e) =>
+                          updateField(index, { placeholder: e.target.value })
+                        }
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Help Text</Label>
                       <Input
                         value={field.helpText || ""}
-                        onChange={(e) => updateField(index, { helpText: e.target.value })}
+                        onChange={(e) =>
+                          updateField(index, { helpText: e.target.value })
+                        }
                       />
                     </div>
                   </div>
 
-                  {/* Width & Switches */}
                   <div className="grid gap-4 md:grid-cols-3 items-end">
                     <div className="space-y-2">
                       <Label>Width</Label>
                       <Select
                         value={field.width || "full"}
-                        onValueChange={(v) => updateField(index, { width: v as any })}
+                        onValueChange={(v) =>
+                          updateField(index, { width: v as any })
+                        }
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -303,7 +372,9 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
                     <div className="flex items-center gap-4">
                       <Switch
                         checked={field.hidden || false}
-                        onCheckedChange={(checked) => updateField(index, { hidden: checked })}
+                        onCheckedChange={(checked) =>
+                          updateField(index, { hidden: checked })
+                        }
                       />
                       <Label>Hidden</Label>
                     </div>
@@ -312,7 +383,10 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
                         checked={field.validation?.required || false}
                         onCheckedChange={(checked) =>
                           updateField(index, {
-                            validation: { ...field.validation, required: checked },
+                            validation: {
+                              ...field.validation,
+                              required: checked,
+                            },
                           })
                         }
                       />
@@ -320,38 +394,61 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
                     </div>
                   </div>
 
-                  {/* Options for select/radio/multiselect */}
-                  {(field.type === "select" ||
-                    field.type === "radio" ||
-                    field.type === "multiselect") && (
+                  {/* Options Editor for select/radio/multiselect */}
+                  {needOptions && (
                     <div className="space-y-2">
-                      <Label>Options</Label>
-                      <Textarea
-                        value={
-                          field.options
-                            ?.map((o) => `${o.label}|${o.value}`)
-                            .join("\n") || ""
-                        }
-                        onChange={(e) => {
-                          const lines = e.target.value.split("\n");
-                          const opts = lines
-                            .map((line) => {
-                              const [label, value] = line.split("|").map((s) => s.trim());
-                              return { label: label || value, value: value || label };
-                            })
-                            .filter((o) => o.label);
-                          updateField(index, { options: opts });
-                        }}
-                        placeholder="Label|value"
-                        className="min-h-24"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        One per line. Format: <code>Label|value</code>
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <Label>Options</Label>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addOption(index)}
+                          className="h-7 text-xs"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Add Option
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        {(field.options || []).map((opt, optIdx) => (
+                          <div
+                            key={optIdx}
+                            className="flex items-center gap-2"
+                          >
+                            <Input
+                              value={opt.label}
+                              onChange={(e) =>
+                                updateOption(index, optIdx, {
+                                  label: e.target.value,
+                                })
+                              }
+                              placeholder="Label"
+                              className="h-8 text-sm"
+                            />
+                            <Input
+                              value={opt.value}
+                              onChange={(e) =>
+                                updateOption(index, optIdx, {
+                                  value: e.target.value,
+                                })
+                              }
+                              placeholder="Value"
+                              className="h-8 text-sm"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => removeOption(index, optIdx)}
+                            >
+                              <X className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  {/* Advanced section (key & name) */}
+                  {/* Advanced */}
                   <div className="border-t pt-3">
                     <Button
                       variant="ghost"
@@ -370,7 +467,9 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
                           </Label>
                           <Input
                             value={field.key}
-                            onChange={(e) => updateField(index, { key: e.target.value })}
+                            onChange={(e) =>
+                              updateField(index, { key: e.target.value })
+                            }
                             className="text-xs font-mono"
                           />
                         </div>
@@ -380,7 +479,9 @@ export default function FieldsManager({ fields, onChange, onUpdateLayout }: Prop
                           </Label>
                           <Input
                             value={field.name}
-                            onChange={(e) => updateField(index, { name: e.target.value })}
+                            onChange={(e) =>
+                              updateField(index, { name: e.target.value })
+                            }
                             className="text-xs font-mono"
                           />
                         </div>

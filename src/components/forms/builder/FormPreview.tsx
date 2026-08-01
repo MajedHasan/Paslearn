@@ -4,12 +4,9 @@ import React, { useMemo } from "react";
 import { Smartphone, Monitor, Eye, LayoutGrid } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FormBuilderDraft } from "@/types/forms/shared/builder.types";
-import FormRenderer from "@/components/forms/runtime/FormRenderer"; // adjust import path
+import FormRenderer from "@/components/forms/runtime/FormRenderer";
 
-// Helper to create a default layout from fields (same as the builder's auto‑generate)
-function generateDefaultLayout(
-  fields: FormBuilderDraft["fields"]
-): FormBuilderDraft["layout"] {
+function generateDefaultLayout(fields: FormBuilderDraft["fields"]): FormBuilderDraft["layout"] {
   if (!fields.length) return [];
   return [
     {
@@ -30,34 +27,34 @@ interface Props {
 }
 
 export default function FormPreview({ draft }: Props) {
-  // Use existing layout if present, otherwise generate a simple one so fields are visible
   const effectiveLayout = useMemo(() => {
     if (draft.layout && draft.layout.length > 0) return draft.layout;
     return generateDefaultLayout(draft.fields);
   }, [draft.layout, draft.fields]);
 
-  // Build the resource that FormRenderer expects, with the effective layout
-  const formResource = useMemo(() => ({
-    key: draft.key,
-    name: draft.name,
-    description: draft.description,
-    fields: draft.fields,
-    layout: effectiveLayout,
-    steps: draft.steps,
-    showProgressBar: draft.showProgressBar,
-    conditions: draft.conditions,
-    submitAction: draft.submitAction,
-    meta: draft.meta,
-    spamProtection: draft.spamProtection,
-    notifications: draft.notifications,
-    webhooks: draft.webhooks,
-    aiAssistant: draft.aiAssistant,
-    tags: draft.tags,
-    version: draft.version,
-    isTemplate: draft.isTemplate,
-  }), [draft, effectiveLayout]);
+  const formResource = useMemo(
+    () => ({
+      key: draft.key,
+      name: draft.name,
+      description: draft.description,
+      fields: draft.fields,
+      layout: effectiveLayout,
+      steps: draft.steps,
+      showProgressBar: draft.showProgressBar,
+      conditions: draft.conditions,
+      submitAction: draft.submitAction,
+      meta: draft.meta,
+      spamProtection: draft.spamProtection,
+      notifications: draft.notifications,
+      webhooks: draft.webhooks,
+      aiAssistant: draft.aiAssistant,
+      tags: draft.tags,
+      version: draft.version,
+      isTemplate: draft.isTemplate,
+    }),
+    [draft, effectiveLayout]
+  );
 
-  // If there are no fields at all, show a helpful placeholder
   if (!draft.fields.length) {
     return (
       <div className="rounded-3xl border bg-white p-6 shadow-sm">
@@ -74,7 +71,7 @@ export default function FormPreview({ draft }: Props) {
   }
 
   return (
-    <div className="rounded-3xl border bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border bg-white p-4 sm:p-6 shadow-sm">
       <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
         <Eye className="h-5 w-5 text-amber-500" />
         Live Preview
@@ -102,28 +99,27 @@ export default function FormPreview({ draft }: Props) {
                 {draft.name || "Form Preview"}
               </span>
             </div>
-            <div className="p-4 h-[600px] overflow-y-auto bg-white">
-              <FormRenderer
-                form={formResource as any}
-                embedded
-                previewMode  // ← disables real submission
-              />
+            <div className="p-4 h-[400px] sm:h-[600px] overflow-y-auto bg-white">
+              <FormRenderer form={formResource as any} embedded previewMode />
             </div>
           </div>
         </TabsContent>
 
         <TabsContent value="mobile">
           <div className="flex justify-center">
-            <div className="w-[375px] max-w-full border-[8px] border-gray-800 rounded-[3rem] overflow-hidden shadow-2xl bg-white">
+            <div className="w-full max-w-[375px] border-[8px] border-gray-800 rounded-[3rem] overflow-hidden shadow-2xl bg-white">
               <div className="h-6 bg-gray-800 flex items-center justify-center">
                 <div className="w-16 h-1.5 rounded-full bg-gray-600" />
               </div>
-              <div className="h-[650px] overflow-y-auto p-3">
-                <FormRenderer
-                  form={formResource as any}
-                  embedded
-                  previewMode
-                />
+              <div className="h-[650px] overflow-y-auto bg-white">
+                <div className="h-full">
+                  <FormRenderer
+                    form={formResource as any}
+                    embedded
+                    previewMode
+                    forceMobile
+                  />
+                </div>
               </div>
               <div className="h-8 bg-gray-800 flex items-center justify-center">
                 <div className="w-8 h-8 rounded-full border-2 border-gray-600" />
