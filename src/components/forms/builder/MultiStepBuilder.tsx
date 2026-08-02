@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { FormStep } from "@/types/forms/shared/form.interface";
 import { FieldDefinition } from "@/types/forms/shared/field.types";
+import { LayoutBlock } from "@/types/forms/shared/layout.types";
 
 interface Props {
   steps: FormStep[];
@@ -79,7 +80,7 @@ export default function MultiStepBuilder({
     );
     if (alreadyAssigned) return;
 
-    const newBlock = { id: `s${stepIndex}-${fieldKey}`, type: "field", fieldKey };
+    const newBlock: LayoutBlock = { id: `s${stepIndex}-${fieldKey}`, type: "field", fieldKey };
     const updatedLayout = [...step.layout, newBlock];
     updateStep(stepIndex, { layout: updatedLayout });
   };

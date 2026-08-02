@@ -100,6 +100,16 @@ export const AdminSidebarItems: SidebarItem[] = [
     icon: Blocks,
   },
   {
+    name: "Automation",
+    url: "/automation",
+    icon: CloudLightning,
+  },
+  {
+    name: "Booking Management",
+    url: "/bookings",
+    icon: Users2,
+  },
+  {
     name: "Email Marketing",
     url: "/email-marketing",
     icon: Mailbox,

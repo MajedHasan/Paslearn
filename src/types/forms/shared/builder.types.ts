@@ -14,9 +14,9 @@ export interface FormBuilderDraft {
   conditions: ConditionalRule[];
   submitAction: {
     type: "message" | "redirect" | "message_then_redirect";
-    message: string;
-    redirectTo: string;
-    delayMs: number;
+    message?: string;
+    redirectTo?: string;
+    delayMs?: number;
   };
   meta: {
     submitButtonText: string;

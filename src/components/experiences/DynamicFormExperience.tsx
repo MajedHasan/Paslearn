@@ -5,9 +5,9 @@ import axios from "axios";
 
 import api from "@/lib/api";
 import SystemExperience from "@/components/system/SystemExperience";
-import FormRenderer, {
-  FormResource,
-} from "@/components/forms/runtime/FormRenderer";
+import FormRenderer from "@/components/forms/runtime/FormRenderer";
+import { IForm } from "@/types/forms/shared/form.interface";
+
 
 export default function DynamicFormExperience({
   config = {},
@@ -20,7 +20,7 @@ export default function DynamicFormExperience({
   const [state, setState] = useState<
     "loading" | "ready" | "offline" | "backend" | "blocked"
   >("loading");
-  const [resource, setResource] = useState<FormResource | null>(null);
+  const [resource, setResource] = useState<IForm | null>(null);
 
   useEffect(() => {
     const load = async () => {

@@ -92,6 +92,8 @@ export interface AIAssistant {
 
 // Main Form document
 export interface IForm extends Document {
+  _id?: string;                // optional for new forms (will be generated)
+  
   key: string;
   name: string;
   description?: string;
@@ -111,6 +113,7 @@ export interface IForm extends Document {
   // Submit behaviour
   submitAction?: IFormSubmitAction;
   meta?: IFormMeta;
+  submissionCount?: number;      // total submissions (incremented on each submission)
 
   // Security & spam
   spamProtection?: SpamProtection;

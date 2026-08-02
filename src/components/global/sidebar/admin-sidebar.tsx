@@ -23,7 +23,7 @@ import React from "react";
 type Props = {};
 
 const AdminSidebar = (props: Props) => {
-  const user = useAppSelector((state) => state.user.currentUser);
+  const user = useAppSelector((state) => state?.user.currentUser);
 
   return (
     <aside className="flex flex-col gap-5 justify-between h-full p-3">

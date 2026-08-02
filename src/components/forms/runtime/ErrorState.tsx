@@ -1,17 +1,20 @@
 "use client";
 
 import { AlertTriangle, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   title?: string;
   message?: string;
   tone?: "error" | "warning";
+  onRetry?: () => void;
 }
 
 export default function ErrorState({
   title = "Something went wrong",
   message = "Please try again.",
   tone = "error",
+  onRetry,
 }: Props) {
   const isWarning = tone === "warning";
 
@@ -50,6 +53,16 @@ export default function ErrorState({
       >
         {message}
       </p>
+
+      {onRetry && (
+        <Button
+          variant="outline"
+          className="mt-6"
+          onClick={onRetry}
+        >
+          Try again
+        </Button>
+      )}
     </div>
   );
 }

@@ -249,7 +249,7 @@ export default function FormsPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredForms.map((form) => (
-                    <TableRow key={form._id} className="group">
+                    <TableRow key={form?._id} className="group">
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -285,7 +285,7 @@ export default function FormsPage() {
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={form.enabled}
-                            onCheckedChange={() => toggleForm(form?._id)}
+                            onCheckedChange={() => toggleForm(form?._id as string)}
                           />
                           <span
                             className={`text-xs font-medium ${
@@ -330,7 +330,7 @@ export default function FormsPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
-                                  onClick={() => duplicateForm(form?._id)}
+                                  onClick={() => duplicateForm(form?._id as string)}
                                 >
                                   <Copy className="h-4 w-4" />
                                 </Button>
@@ -344,7 +344,7 @@ export default function FormsPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-destructive hover:text-destructive"
-                                  onClick={() => confirmDelete(form?._id)}
+                                  onClick={() => confirmDelete(form?._id as string)}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
