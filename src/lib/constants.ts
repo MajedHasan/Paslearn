@@ -35,6 +35,7 @@ import {
   Palette,
   UsersRound,
   Blocks,
+  Cpu,
 } from "lucide-react";
 import { SidebarItem } from "./types";
 
@@ -198,6 +199,102 @@ export const TeacherSidebarItems: SidebarItem[] = [
     icon: Layers3,
   },
   {
+    name: "Form Builder",
+    url: "/form-builder",
+    icon: Layers3,
+  },
+  {
+    name: "Experience Builder",
+    url: "/experience-builder",
+    icon: Layers3,
+  },
+  {
+    name: "Design Studio",
+    url: "/design-studio",
+    icon: Layers3,
+    subItems: [
+      {
+        name: "Logo Maker",
+        url: "/design-studio/logo-maker",
+        icon: Frame,
+      },
+      {
+        name: "Creative library",
+        url: "/design-studio/creative-library",
+        icon: LibrarySquare,
+      }
+    ],
+  },
+  {
+    name: "Website",
+    url: "/website",
+    icon: Layout,
+    subItems: [
+      {
+        name: "Themes",
+        url: "/website/themes",
+        icon: Palette,
+      },
+      {
+        name: "Landing Pages",
+        url: "/website/landing-pages",
+        icon: Layout,
+      },
+      {
+        name: "Form Builder",
+        url: "/website/form-builder",
+        icon: Layout,
+      },
+      {
+        name: "Experience Builder",
+        url: "/website/experience-builder",
+        icon: Layout,
+      },
+      {
+        name: "Sales Page Builder",
+        url: "/website/sales-page-builder",
+        icon: Layout,
+      }
+    ],
+  },
+  {
+    name: "Marketing",
+    url: "/marketing",
+    icon: BarChartBig,
+    subItems: [
+      {
+        name: "Email Marketing",
+        url: "/marketing/email-marketing",
+        icon: Mails,
+      },
+      {
+        name: "AI & Automation",
+        url: "/marketing/ai-automation",
+        icon: Cpu,
+      },
+      {
+        name: "Coupons/Discounts",
+        url: "/marketing/coupons-discounts",
+        icon: TicketPercent,
+      },
+      {
+        name: "Marketing Strategy",
+        url: "/marketing/marketing-strategy",
+        icon: Store,
+      },
+      {
+        name: "Ad Copy Library",
+        url: "/marketing/ad-copy-library",
+        icon: Megaphone,
+      },
+      {
+        name: "Lead Magnet",
+        url: "/marketing/lead-magnet",
+        icon: Magnet,
+      },
+    ],
+  },
+  {
     name: "Creative Library",
     url: "/creative-library",
     icon: LibrarySquare,
@@ -226,6 +323,11 @@ export const TeacherSidebarItems: SidebarItem[] = [
     name: "Email Marketing",
     url: "/email-marketing",
     icon: Mails,
+  },
+  {
+    name: "AI & Automation",
+    url: "/ai-automation",
+    icon: Cpu,
   },
   {
     name: "Coupons/Discounts",

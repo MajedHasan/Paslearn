@@ -20,4 +20,5 @@ export interface SidebarItem {
   name: string;
   url: string;
   icon: React.ComponentType<any>; // Specify the type of icon as JSX.Element
+  subItems?: SidebarItem[]; // Optional property for sub-items
 }

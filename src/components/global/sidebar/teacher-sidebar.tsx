@@ -25,6 +25,7 @@ const TeacherSidebar = (props: Props) => {
         <div className="flex flex-1 overflow-hiden max-h-full">
           <div className="flex flex-col overflow-scroll flex-1">
             {TeacherSidebarItems.map((item) => (
+              <>
               <Link
                 key={item.name}
                 href={`/teacher${item.url}`}
@@ -39,7 +40,27 @@ const TeacherSidebar = (props: Props) => {
                 <span className="text-sm text-[#A0AEC0] group-hover:text-slate-50 group-hover:font-bold">
                   {item.name}
                 </span>
-              </Link>
+                </Link>
+                {item?.subItems && (
+                  <div className="ml-6 mt-2 flex flex-col gap-1 bg-teal-50 rounded-lg p-2">
+                    {item.subItems.map((subItem) => (
+                      <Link
+                        key={subItem.name}
+                        href={`/teacher${subItem.url}`}
+                        className="w-full py-2 hover:bg-themeTeacherPrimary transition-all rounded-lg pl-4 group flex items-center gap-3 "
+                      >
+                        <subItem.icon
+                          size={20}
+                          className="text-themeTeacherPrimary group-hover:text-slate-50"
+                        />
+                        <span className="text-sm text-[#A0AEC0] group-hover:text-slate-50 group-hover:font-bold">
+                          {subItem.name}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </>
             ))}
           </div>
         </div>
