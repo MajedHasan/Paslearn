@@ -36,6 +36,14 @@ import {
   UsersRound,
   Blocks,
   Cpu,
+  GraduationCap,
+  Rocket,
+  Palette as PaletteIcon,
+  Globe,
+  Mail,
+  Wand2,
+  FileText,
+  PenTool,
 } from "lucide-react";
 import { SidebarItem } from "./types";
 
@@ -166,182 +174,152 @@ export const TeacherSidebarItems: SidebarItem[] = [
   {
     name: "Dashboard",
     url: "/",
-    icon: LayoutGrid,
-  },
-  {
-    name: "Affiliate",
-    url: "/affiliate",
-    icon: BarChartBig,
+    icon: Home,
+    minPlan: "free_trial",
   },
   {
     name: "Courses",
     url: "/courses",
-    icon: Laptop,
+    icon: BookOpen,
+    minPlan: "free_trial",
+    status: "beta",
+  },
+  {
+    name: "Affiliate",
+    url: "/affiliate",
+    icon: Share2,
+    minPlan: "free_trial",
   },
   {
     name: "Online Coaching",
     url: "/online-coaching",
     icon: Presentation,
+    minPlan: "free_trial",
+    status: "coming_soon",
   },
   {
     name: "Digital Files",
     url: "/digital-files",
     icon: Folders,
-  },
-  {
-    name: "Logo Maker",
-    url: "/logo-maker",
-    icon: Frame,
-  },
-  {
-    name: "Landing Page",
-    url: "/landing-page",
-    icon: Layers3,
-  },
-  {
-    name: "Form Builder",
-    url: "/form-builder",
-    icon: Layers3,
-  },
-  {
-    name: "Experience Builder",
-    url: "/experience-builder",
-    icon: Layers3,
+    minPlan: "starter",
   },
   {
     name: "Design Studio",
     url: "/design-studio",
-    icon: Layers3,
+    icon: Palette,
+    minPlan: "pro",
     subItems: [
       {
         name: "Logo Maker",
         url: "/design-studio/logo-maker",
         icon: Frame,
+        minPlan: "pro",
+        status: "beta",
       },
       {
-        name: "Creative library",
+        name: "Creative Library",
         url: "/design-studio/creative-library",
         icon: LibrarySquare,
-      }
+        minPlan: "pro",
+      },
     ],
   },
   {
     name: "Website",
     url: "/website",
-    icon: Layout,
+    icon: Globe,
+    minPlan: "pro",
     subItems: [
       {
-        name: "Themes",
-        url: "/website/themes",
-        icon: Palette,
+        name: "Themes", 
+        url: "/website/themes", 
+        icon: PaletteIcon, 
+        minPlan: "pro"
       },
       {
-        name: "Landing Pages",
-        url: "/website/landing-pages",
-        icon: Layout,
+        name: "Landing Pages", 
+        url: "/website/landing-pages", 
+        icon: Layout, 
+        minPlan: "pro"
       },
       {
-        name: "Form Builder",
-        url: "/website/form-builder",
-        icon: Layout,
+        name: "Form Builder", 
+        url: "/website/form-builder", 
+        icon: Blocks, 
+        minPlan: "pro"
       },
       {
-        name: "Experience Builder",
-        url: "/website/experience-builder",
-        icon: Layout,
+        name: "Experience Builder", 
+        url: "/website/experience-builder", 
+        icon: Wand2, 
+        minPlan: "pro",
+        status: "beta"
       },
       {
-        name: "Sales Page Builder",
-        url: "/website/sales-page-builder",
-        icon: Layout,
-      }
+        name: "Sales Page Builder", 
+        url: "/website/sales-page-builder", 
+        icon: PanelsTopLeft, 
+        minPlan: "pro",
+        status: "coming_soon"
+      },
     ],
   },
   {
     name: "Marketing",
     url: "/marketing",
-    icon: BarChartBig,
+    icon: Megaphone,
+    minPlan: "business",
     subItems: [
       {
         name: "Email Marketing",
         url: "/marketing/email-marketing",
-        icon: Mails,
+        icon: Mail,
+        minPlan: "business"
       },
       {
-        name: "AI & Automation",
-        url: "/marketing/ai-automation",
-        icon: Cpu,
+        name: "AI & Automation", 
+        url: "/marketing/ai-automation", 
+        icon: Cpu, 
+        minPlan: "business",
+        status: "beta"
       },
       {
-        name: "Coupons/Discounts",
-        url: "/marketing/coupons-discounts",
-        icon: TicketPercent,
+        name: "Coupons/Discounts", 
+        url: "/marketing/coupons-discounts", 
+        icon: TicketPercent, 
+        minPlan: "business"
       },
       {
-        name: "Marketing Strategy",
-        url: "/marketing/marketing-strategy",
-        icon: Store,
+        name: "Marketing Strategy", 
+        url: "/marketing/marketing-strategy", 
+        icon: Store, 
+        minPlan: "business"
       },
       {
-        name: "Ad Copy Library",
-        url: "/marketing/ad-copy-library",
-        icon: Megaphone,
+        name: "Ad Copy Library", 
+        url: "/marketing/ad-copy-library", 
+        icon: FileText, 
+        minPlan: "business",
+        status: "coming_soon"
       },
       {
-        name: "Lead Magnet",
-        url: "/marketing/lead-magnet",
-        icon: Magnet,
+        name: "Lead Magnet", 
+        url: "/marketing/lead-magnet", 
+        icon: Magnet, 
+        minPlan: "business"
       },
     ],
-  },
-  {
-    name: "Creative Library",
-    url: "/creative-library",
-    icon: LibrarySquare,
-  },
-  {
-    name: "Marketing Strategy",
-    url: "/marketing-strategy",
-    icon: Store,
-  },
-  {
-    name: "Ad Copy Library",
-    url: "/ad-copy-library",
-    icon: Megaphone,
-  },
-  {
-    name: "Lead Magnet",
-    url: "/lead-magnet",
-    icon: Magnet,
-  },
-  {
-    name: "Sales Page Maker",
-    url: "/sales-page",
-    icon: PanelsTopLeft,
-  },
-  {
-    name: "Email Marketing",
-    url: "/email-marketing",
-    icon: Mails,
-  },
-  {
-    name: "AI & Automation",
-    url: "/ai-automation",
-    icon: Cpu,
-  },
-  {
-    name: "Coupons/Discounts",
-    url: "/coupons-discounts",
-    icon: TicketPercent,
-  },
-  {
-    name: "Themes",
-    url: "/themes",
-    icon: Palette,
   },
   {
     name: "Student Management",
     url: "/student",
     icon: UsersRound,
+    minPlan: "free",
+  },
+  {
+    name: "Settings",
+    url: "/settings",
+    icon: Settings,
+    minPlan: "free",
   },
 ];
