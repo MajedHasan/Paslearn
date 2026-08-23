@@ -1,7 +1,7 @@
 // @ts-nocheck
 // @ts-ignore
 
-import React from "react"; // Import React if you're using JSX
+import React from "react";
 import {
   BetweenHorizonalEndIcon,
   BookDashedIcon,
@@ -44,9 +44,16 @@ import {
   Wand2,
   FileText,
   PenTool,
+  CalendarDays,
+  Headphones,
+  Inbox,
+  Award,
+  BookMarked,
+  UserRound,
 } from "lucide-react";
 import { SidebarItem } from "./types";
 
+// ─── Admin Sidebar (grouped & unique icons) ─────────────────
 export const AdminSidebarItems: SidebarItem[] = [
   {
     name: "Dashboard",
@@ -57,6 +64,18 @@ export const AdminSidebarItems: SidebarItem[] = [
     name: "User Management",
     url: "/users",
     icon: Users2,
+    subItems: [
+      {
+        name: "All Users",
+        url: "/users",
+        icon: Users2,
+      },
+      {
+        name: "Bookings",
+        url: "/bookings",
+        icon: CalendarDays,
+      },
+    ],
   },
   {
     name: "Plans & Pricing",
@@ -64,64 +83,80 @@ export const AdminSidebarItems: SidebarItem[] = [
     icon: BetweenHorizonalEndIcon,
   },
   {
-    name: "Theme Builder",
-    url: "/theme-builder",
-    icon: LayoutGrid,
+    name: "Website",
+    url: "/website",
+    icon: Globe,
+    subItems: [
+      {
+        name: "Theme Builder",
+        url: "/theme-builder",
+        icon: LayoutGrid,
+      },
+      {
+        name: "Landing Page Builder",
+        url: "/landing-page",
+        icon: BookDashedIcon,
+      },
+      {
+        name: "Sales Page Builder",
+        url: "/sales-page",
+        icon: PanelsTopLeft,
+      },
+      {
+        name: "Form Builder",
+        url: "/forms",
+        icon: Blocks,
+      },
+      {
+        name: "Form Submission",
+        url: "/submissions",
+        icon: Inbox,
+      },
+      {
+        name: "Lead Magnet Builder",
+        url: "/lead-magnet",
+        icon: Magnet,
+      },
+    ],
+  },
+  {
+    name: "Marketing",
+    url: "/marketing",
+    icon: Megaphone,
+    subItems: [
+      {
+        name: "Email Marketing",
+        url: "/email-marketing",
+        icon: Mailbox,
+      },
+      {
+        name: "Automation",
+        url: "/automation",
+        icon: CloudLightning,
+      },
+    ],
   },
   {
     name: "Support",
     url: "/support",
-    icon: CloudLightning,
-  },
-  {
-    name: "Features Request",
-    url: "/features-request",
-    icon: ListChecksIcon,
+    icon: Headphones,
+    subItems: [
+      {
+        name: "Support",
+        url: "/support",
+        icon: Headphones,
+      },
+      {
+        name: "Features Request",
+        url: "/features-request",
+        icon: ListChecksIcon,
+      },
+    ],
   },
   {
     name: "Affiliate",
     url: "/affiliate",
     icon: Share2,
-  },
-  {
-    name: "Landing Page Builder",
-    url: "/landing-page",
-    icon: BookDashedIcon,
-  },
-  {
-    name: "Lead Magnet Builder",
-    url: "/lead-magnet",
-    icon: Magnet,
-  },
-  {
-    name: "Sales Page Builder",
-    url: "/sales-page",
-    icon: Magnet,
-  },
-  {
-    name: "Form Builder",
-    url: "/forms",
-    icon: Blocks,
-  },
-  {
-    name: "Form Submission",
-    url: "/submissions",
-    icon: Blocks,
-  },
-  {
-    name: "Automation",
-    url: "/automation",
-    icon: CloudLightning,
-  },
-  {
-    name: "Booking Management",
-    url: "/bookings",
-    icon: Users2,
-  },
-  {
-    name: "Email Marketing",
-    url: "/email-marketing",
-    icon: Mailbox,
   },
   {
     name: "Blogs",
@@ -130,6 +165,7 @@ export const AdminSidebarItems: SidebarItem[] = [
   },
 ];
 
+// ─── Student Sidebar (unchanged) ──────────────────────────
 export const StudentSidebarItems: SidebarItem[] = [
   {
     name: "Dashboard",
@@ -137,9 +173,54 @@ export const StudentSidebarItems: SidebarItem[] = [
     icon: Home,
   },
   {
-    name: "Courses",
-    url: "/courses",
+    name: "Learning",
+    url: "/learning",
     icon: BookOpen,
+    subItems: [
+      {
+        name: "Courses",
+        url: "/courses",
+        icon: BookOpen,
+        status: "beta",
+      },
+      {
+        name: "Certificates",
+        url: "/certificates",
+        icon: Award,
+        status: "coming_soon",
+        minPlan: "pro",
+      },
+      {
+        name: "Bookmarks",
+        url: "/bookmarks",
+        icon: BookMarked,
+        status: "coming_soon",
+      },
+    ],
+  },
+  {
+    name: "Services",
+    url: "/services",
+    icon: Presentation,
+    subItems: [
+      {
+        name: "Online Coaching",
+        url: "/online-coaching",
+        icon: Presentation,
+        status: "coming_soon",
+      },
+      {
+        name: "Digital Files",
+        url: "/digital-files",
+        icon: Folders,
+      },
+      {
+        name: "Bookings",
+        url: "/bookings",
+        icon: CalendarDays,
+        status: "coming_soon",
+      },
+    ],
   },
   {
     name: "Affiliate",
@@ -147,16 +228,28 @@ export const StudentSidebarItems: SidebarItem[] = [
     icon: PieChart,
   },
   {
-    name: "Online Coaching",
-    url: "/online-coaching",
-    icon: BarChart3,
+    name: "Messages",
+    url: "/messages",
+    icon: MessageCircleMore,
   },
   {
-    name: "Digital Files",
-    url: "/digital-files",
-    icon: Folders,
+    name: "Profile",
+    url: "/profile",
+    icon: UserRound,
+  },
+  {
+    name: "Settings",
+    url: "/settings",
+    icon: Settings,
+  },
+  {
+    name: "Help Center",
+    url: "/help-center",
+    icon: Headphones,
+    status: "coming_soon",
   },
 ];
+
 export const StudentSidebarItems2: SidebarItem[] = [
   {
     name: "Messages",
@@ -170,6 +263,7 @@ export const StudentSidebarItems2: SidebarItem[] = [
   },
 ];
 
+// ─── Teacher Sidebar (unchanged) ──────────────────────────
 export const TeacherSidebarItems: SidebarItem[] = [
   {
     name: "Dashboard",
@@ -231,36 +325,36 @@ export const TeacherSidebarItems: SidebarItem[] = [
     minPlan: "pro",
     subItems: [
       {
-        name: "Themes", 
-        url: "/website/themes", 
-        icon: PaletteIcon, 
-        minPlan: "pro"
-      },
-      {
-        name: "Landing Pages", 
-        url: "/website/landing-pages", 
-        icon: Layout, 
-        minPlan: "pro"
-      },
-      {
-        name: "Form Builder", 
-        url: "/website/form-builder", 
-        icon: Blocks, 
-        minPlan: "pro"
-      },
-      {
-        name: "Experience Builder", 
-        url: "/website/experience-builder", 
-        icon: Wand2, 
+        name: "Themes",
+        url: "/website/themes",
+        icon: PaletteIcon,
         minPlan: "pro",
-        status: "beta"
       },
       {
-        name: "Sales Page Builder", 
-        url: "/website/sales-page-builder", 
-        icon: PanelsTopLeft, 
+        name: "Landing Pages",
+        url: "/website/landing-pages",
+        icon: Layout,
         minPlan: "pro",
-        status: "coming_soon"
+      },
+      {
+        name: "Form Builder",
+        url: "/website/form-builder",
+        icon: Blocks,
+        minPlan: "pro",
+      },
+      {
+        name: "Experience Builder",
+        url: "/website/experience-builder",
+        icon: Wand2,
+        minPlan: "pro",
+        status: "beta",
+      },
+      {
+        name: "Sales Page Builder",
+        url: "/website/sales-page-builder",
+        icon: PanelsTopLeft,
+        minPlan: "pro",
+        status: "coming_soon",
       },
     ],
   },
@@ -274,39 +368,39 @@ export const TeacherSidebarItems: SidebarItem[] = [
         name: "Email Marketing",
         url: "/marketing/email-marketing",
         icon: Mail,
-        minPlan: "business"
-      },
-      {
-        name: "AI & Automation", 
-        url: "/marketing/ai-automation", 
-        icon: Cpu, 
         minPlan: "business",
-        status: "beta"
       },
       {
-        name: "Coupons/Discounts", 
-        url: "/marketing/coupons-discounts", 
-        icon: TicketPercent, 
-        minPlan: "business"
-      },
-      {
-        name: "Marketing Strategy", 
-        url: "/marketing/marketing-strategy", 
-        icon: Store, 
-        minPlan: "business"
-      },
-      {
-        name: "Ad Copy Library", 
-        url: "/marketing/ad-copy-library", 
-        icon: FileText, 
+        name: "AI & Automation",
+        url: "/marketing/ai-automation",
+        icon: Cpu,
         minPlan: "business",
-        status: "coming_soon"
+        status: "beta",
       },
       {
-        name: "Lead Magnet", 
-        url: "/marketing/lead-magnet", 
-        icon: Magnet, 
-        minPlan: "business"
+        name: "Coupons/Discounts",
+        url: "/marketing/coupons-discounts",
+        icon: TicketPercent,
+        minPlan: "business",
+      },
+      {
+        name: "Marketing Strategy",
+        url: "/marketing/marketing-strategy",
+        icon: Store,
+        minPlan: "business",
+      },
+      {
+        name: "Ad Copy Library",
+        url: "/marketing/ad-copy-library",
+        icon: FileText,
+        minPlan: "business",
+        status: "coming_soon",
+      },
+      {
+        name: "Lead Magnet",
+        url: "/marketing/lead-magnet",
+        icon: Magnet,
+        minPlan: "business",
       },
     ],
   },
@@ -314,12 +408,12 @@ export const TeacherSidebarItems: SidebarItem[] = [
     name: "Student Management",
     url: "/student",
     icon: UsersRound,
-    minPlan: "free",
+    minPlan: "free_trial",
   },
   {
     name: "Settings",
     url: "/settings",
     icon: Settings,
-    minPlan: "free",
+    minPlan: "free_trial",
   },
 ];

@@ -31,11 +31,13 @@ import {
   BookText,
   ChevronDown,
   CircleHelp,
+  Clock,
   GraduationCap,
+  Lock,
   LogOut,
   Search,
+  Sparkles,
   X,
-  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppSelector, useAppDispatch } from "@/hooks/useRedux";
@@ -74,9 +76,11 @@ const TeacherSidebar = ({ collapsed }: Props) => {
     return Math.round((filled / total) * 100);
   }, [teacherProfile]);
 
-  // Determine current tier, treating "free_trial" as "free"
   const currentTier = useMemo(() => {
-    const plan = teacherProfile?.selectedPlan?.slug || teacherProfile?.selectedPlan?.name || "free";
+    const plan =
+      teacherProfile?.selectedPlan?.slug ||
+      teacherProfile?.selectedPlan?.name ||
+      "free";
     const normalized = plan.toLowerCase() === "free_trial" ? "free" : plan.toLowerCase();
     return PLAN_TIERS[normalized] ?? 0;
   }, [teacherProfile]);
@@ -88,7 +92,10 @@ const TeacherSidebar = ({ collapsed }: Props) => {
 
   const isParentActive = (url: string) => {
     if (url === "/") return pathname === "/teacher" || pathname === "/teacher/";
-    return pathname === `/teacher${url}` || pathname.startsWith(`/teacher${url}/`);
+    return (
+      pathname === `/teacher${url}` ||
+      pathname.startsWith(`/teacher${url}/`)
+    );
   };
 
   const isChildActive = (url: string) => {
@@ -104,7 +111,9 @@ const TeacherSidebar = ({ collapsed }: Props) => {
     if (!q) return TeacherSidebarItems;
     return TeacherSidebarItems.filter((item) => {
       const parentMatch = item.name.toLowerCase().includes(q);
-      const childMatch = item.subItems?.some((sub) => sub.name.toLowerCase().includes(q));
+      const childMatch = item.subItems?.some((sub) =>
+        sub.name.toLowerCase().includes(q)
+      );
       return parentMatch || childMatch;
     }).map((item) => {
       if (item.subItems && searchQuery) {
@@ -117,44 +126,58 @@ const TeacherSidebar = ({ collapsed }: Props) => {
     });
   }, [TeacherSidebarItems, searchQuery]);
 
-  // Proper badge renderers
+  // Premium status badge (Beta / Soon)
   const renderStatusBadge = (status?: "coming_soon" | "beta") => {
     if (status === "beta") {
       return (
-        <Badge
-          variant="outline"
-          className="ml-auto rounded-full border-amber-200 bg-amber-50 px-1.5 py-0 text-[9px] font-semibold text-amber-700"
-        >
-          BETA
-        </Badge>
+        <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm shadow-amber-200/70">
+          <Sparkles className="h-3 w-3" />
+          Beta
+        </span>
       );
     }
     if (status === "coming_soon") {
       return (
-        <Badge
-          variant="outline"
-          className="ml-auto rounded-full border-slate-200 bg-slate-50 px-1.5 py-0 text-[9px] font-semibold text-slate-500"
-        >
-          SOON
-        </Badge>
+        <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+          <Clock className="h-3 w-3" />
+          Soon
+        </span>
       );
     }
     return null;
   };
 
+  // Premium item icon with lock overlay
   const renderItemIcon = (item: SidebarItem, active: boolean) => (
-    <div className="relative">
+    <div className="relative shrink-0">
       <item.icon
         size={20}
         className={cn(active ? "text-white" : "text-slate-400")}
       />
       {isLocked(item) && (
-        <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-800 text-white shadow-sm">
+        <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md shadow-amber-200/70">
           <Lock size={8} />
         </span>
       )}
     </div>
   );
+
+  // Compact lock badge with tooltip (fixes overlap / hidden submenu)
+  const renderLockBadge = (item: SidebarItem) => {
+    if (!item.minPlan) return null;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-slate-700 to-slate-800 text-white shadow-sm">
+            <Lock size={10} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          Requires {item.minPlan.charAt(0).toUpperCase() + item.minPlan.slice(1)} plan
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
 
   const renderUpgradeModal = () => (
     <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
@@ -213,7 +236,7 @@ const TeacherSidebar = ({ collapsed }: Props) => {
           </div>
         </div>
 
-        {/* Search (expanded only) */}
+        {/* Search */}
         {!collapsed && (
           <div className="relative mt-2 px-1">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -241,10 +264,11 @@ const TeacherSidebar = ({ collapsed }: Props) => {
               const hasSubItems = item.subItems && item.subItems.length > 0;
               const parentActive = isParentActive(item.url);
               const isExpanded =
-                expandedItems[item.name] ?? (parentActive || searchQuery.trim() !== "");
+                expandedItems[item.name] ??
+                (parentActive || searchQuery.trim() !== "");
               const locked = isLocked(item);
 
-              // Collapsed mode with subitems
+              // Collapsed with subitems
               if (collapsed && hasSubItems) {
                 return (
                   <Popover key={item.name}>
@@ -277,7 +301,7 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                             >
                               <subItem.icon size={16} className="text-slate-400" />
                               <span className="flex-1 text-left">{subItem.name}</span>
-                              <Lock size={12} className="text-slate-400" />
+                              {renderLockBadge(subItem)}
                             </button>
                           );
                         }
@@ -289,7 +313,7 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                             >
                               <subItem.icon size={16} className="text-slate-300" />
                               <span className="flex-1 text-left">{subItem.name}</span>
-                              <Badge variant="outline" className="text-[9px]">SOON</Badge>
+                              {renderStatusBadge("coming_soon")}
                             </div>
                           );
                         }
@@ -306,9 +330,7 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                           >
                             <subItem.icon size={16} className={subActive ? "text-amber-600" : "text-slate-400"} />
                             <span className="flex-1 text-left">{subItem.name}</span>
-                            {subItem.status === "beta" && (
-                              <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700">BETA</Badge>
-                            )}
+                            {renderStatusBadge(subItem.status)}
                           </Link>
                         );
                       })}
@@ -317,7 +339,7 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                 );
               }
 
-              // Collapsed mode without subitems
+              // Collapsed without subitems
               if (collapsed && !hasSubItems) {
                 if (locked) {
                   return (
@@ -383,12 +405,12 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                       )}
                     >
                       {renderItemIcon(item, parentActive)}
-                      <span className="flex-1 text-left">{item.name}</span>
+                      <span className="flex-1 text-left truncate">{item.name}</span>
                       {renderStatusBadge(item.status)}
                       <ChevronDown
                         size={16}
                         className={cn(
-                          "transition-transform duration-200",
+                          "transition-transform duration-200 shrink-0",
                           isExpanded ? "rotate-180" : "",
                           parentActive ? "text-white" : "text-slate-400"
                         )}
@@ -400,14 +422,14 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-slate-100 transition-all"
                     >
                       {renderItemIcon(item, false)}
-                      <span className="flex-1 text-left">{item.name}</span>
-                      <Lock size={14} className="text-slate-400" />
+                      <span className="flex-1 text-left truncate">{item.name}</span>
+                      {renderLockBadge(item)}
                     </button>
                   ) : item.status === "coming_soon" ? (
                     <div className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300">
                       {renderItemIcon(item, false)}
-                      <span className="flex-1 text-left">{item.name}</span>
-                      <Badge variant="outline" className="text-[9px]">SOON</Badge>
+                      <span className="flex-1 text-left truncate">{item.name}</span>
+                      {renderStatusBadge("coming_soon")}
                     </div>
                   ) : (
                     <Link
@@ -420,7 +442,7 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                       )}
                     >
                       {renderItemIcon(item, parentActive)}
-                      <span>{item.name}</span>
+                      <span className="truncate">{item.name}</span>
                       {renderStatusBadge(item.status)}
                       {parentActive && !item.status && (
                         <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white shadow-inner" />
@@ -441,8 +463,8 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                               className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-400 hover:bg-slate-50 transition-all"
                             >
                               <subItem.icon size={16} className="text-slate-400" />
-                              <span className="flex-1 text-left">{subItem.name}</span>
-                              <Lock size={12} className="text-slate-400" />
+                              <span className="flex-1 text-left truncate">{subItem.name}</span>
+                              {renderLockBadge(subItem)}
                             </button>
                           );
                         }
@@ -453,8 +475,8 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                               className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-300"
                             >
                               <subItem.icon size={16} className="text-slate-300" />
-                              <span className="flex-1 text-left">{subItem.name}</span>
-                              <Badge variant="outline" className="text-[9px]">SOON</Badge>
+                              <span className="flex-1 text-left truncate">{subItem.name}</span>
+                              {renderStatusBadge("coming_soon")}
                             </div>
                           );
                         }
@@ -475,7 +497,7 @@ const TeacherSidebar = ({ collapsed }: Props) => {
                                 subActive ? "text-amber-600" : "text-slate-400"
                               )}
                             />
-                            <span>{subItem.name}</span>
+                            <span className="truncate">{subItem.name}</span>
                             {renderStatusBadge(subItem.status)}
                             {subActive && !subItem.status && (
                               <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-500" />
@@ -510,9 +532,7 @@ const TeacherSidebar = ({ collapsed }: Props) => {
               <CircleHelp size={16} className="text-amber-400" />
               <span className="text-sm font-semibold">Need Help?</span>
             </div>
-            <p className="mt-1 text-xs text-slate-300">
-              Check our docs or contact support.
-            </p>
+            <p className="mt-1 text-xs text-slate-300">Check our docs or contact support.</p>
             <Button
               asChild
               variant="secondary"
@@ -527,11 +547,11 @@ const TeacherSidebar = ({ collapsed }: Props) => {
           </div>
         )}
 
-        {/* Free plan banner (show only if currentTier is 0) */}
+        {/* Free plan banner */}
         {currentTier === 0 && !collapsed && (
           <Link
             href="/pricing"
-            className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+            className="mt-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 px-3 py-2 text-center text-xs font-semibold text-amber-700 hover:from-amber-100 hover:to-orange-100 transition-colors shadow-sm"
           >
             Upgrade to unlock all features
           </Link>
