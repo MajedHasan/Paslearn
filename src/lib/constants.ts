@@ -50,6 +50,7 @@ import {
   Award,
   BookMarked,
   UserRound,
+  Wallet,
 } from "lucide-react";
 import { SidebarItem } from "./types";
 
@@ -271,6 +272,13 @@ export const TeacherSidebarItems: SidebarItem[] = [
     icon: Home,
     minPlan: "free_trial",
   },
+
+  {
+    name: "Affiliate",
+    url: "/affiliate",
+    icon: Share2,
+    minPlan: "free_trial",
+  },
   {
     name: "Courses",
     url: "/courses",
@@ -279,42 +287,45 @@ export const TeacherSidebarItems: SidebarItem[] = [
     status: "beta",
   },
   {
-    name: "Affiliate",
-    url: "/affiliate",
-    icon: Share2,
-    minPlan: "free_trial",
-  },
-  {
     name: "Online Coaching",
     url: "/online-coaching",
     icon: Presentation,
     minPlan: "free_trial",
-    status: "coming_soon",
+    status: "beta",
   },
   {
     name: "Digital Files",
     url: "/digital-files",
     icon: Folders,
-    minPlan: "starter",
+    minPlan: "free_trial",
+    status: "beta",
+  },
+  {
+    name: "Online Chat",
+    url: "/online-chat",
+    icon: MessageCircleMore,
+    minPlan: "free_trial",
+    status: "beta",
   },
   {
     name: "Design Studio",
     url: "/design-studio",
     icon: Palette,
-    minPlan: "pro",
+    minPlan: "free_trial",
     subItems: [
       {
         name: "Logo Maker",
         url: "/design-studio/logo-maker",
         icon: Frame,
-        minPlan: "pro",
+        minPlan: "free_trial",
         status: "beta",
       },
       {
         name: "Creative Library",
         url: "/design-studio/creative-library",
         icon: LibrarySquare,
-        minPlan: "pro",
+        minPlan: "free_trial",
+        status: "beta",
       },
     ],
   },
@@ -359,6 +370,36 @@ export const TeacherSidebarItems: SidebarItem[] = [
     ],
   },
   {
+    name: "Mobile App",
+    url: "/mobile-app",
+    icon: Laptop,
+    minPlan: "business",
+    status: "coming_soon",
+    subItems: [
+      {
+        name: "App Builder",
+        url: "/mobile-app/app-builder",
+        icon: LayoutGrid,
+        minPlan: "business",
+        status: "coming_soon",
+      },
+      {
+        name: "Push Notifications",
+        url: "/mobile-app/push-notifications",
+        icon: Mails,
+        minPlan: "business",
+        status: "coming_soon",
+      },
+      {
+        name: "App Analytics",
+        url: "/mobile-app/app-analytics",
+        icon: BarChartBig,
+        minPlan: "business",
+        status: "coming_soon",
+      },
+    ],
+  },
+  {
     name: "Marketing",
     url: "/marketing",
     icon: Megaphone,
@@ -381,7 +422,8 @@ export const TeacherSidebarItems: SidebarItem[] = [
         name: "Coupons/Discounts",
         url: "/marketing/coupons-discounts",
         icon: TicketPercent,
-        minPlan: "business",
+        minPlan: "free_trial",
+        status: "beta",
       },
       {
         name: "Marketing Strategy",
@@ -402,6 +444,13 @@ export const TeacherSidebarItems: SidebarItem[] = [
         icon: Magnet,
         minPlan: "business",
       },
+      {
+        name: "Ads",
+        url: "/marketing/ads",
+        icon: Rocket,
+        minPlan: "business",
+        status: "coming_soon",
+      }
     ],
   },
   {
@@ -409,6 +458,13 @@ export const TeacherSidebarItems: SidebarItem[] = [
     url: "/student",
     icon: UsersRound,
     minPlan: "free_trial",
+  },
+  {
+    name: "Billing & Payments",
+    url: "/billing-payments",
+    icon: Wallet,
+    minPlan: "free_trial",
+    status: "beta",
   },
   {
     name: "Settings",
