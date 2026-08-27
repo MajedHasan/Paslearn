@@ -340,6 +340,7 @@ export const TeacherSidebarItems: SidebarItem[] = [
         url: "/website/themes",
         icon: PaletteIcon,
         minPlan: "pro",
+        status: "coming_soon",
       },
       {
         name: "Landing Pages",
@@ -448,8 +449,8 @@ export const TeacherSidebarItems: SidebarItem[] = [
         name: "Ads",
         url: "/marketing/ads",
         icon: Rocket,
-        minPlan: "business",
-        status: "coming_soon",
+        minPlan: "free_trial",
+        status: "beta",
       }
     ],
   },
