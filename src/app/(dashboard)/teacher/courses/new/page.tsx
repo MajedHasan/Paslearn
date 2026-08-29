@@ -53,11 +53,13 @@ import {
   LayoutTemplate,
   PencilRuler,
 } from "lucide-react";
+import api from "@/lib/api"; // adjust path as needed
 
-// ─── Types ───────────────────────────────────────────────
+// ─── Types (updated to match backend) ───────────────────
 type LessonType = "video" | "text" | "quiz" | "assignment" | "file";
 type QuestionType = "multiple_choice" | "true_false" | "short_answer";
 type PriceModel = "free" | "onetime" | "subscription";
+type SubscriptionInterval = "weekly" | "monthly" | "yearly";
 type CompletionCriteria = "watch_all" | "pass_quiz" | "manual";
 
 type Question = {
@@ -67,6 +69,7 @@ type Question = {
   options?: string[];
   correctAnswer?: string;
   points: number;
+  explanation?: string; // optional
 };
 
 type LessonContent = {
@@ -76,6 +79,9 @@ type LessonContent = {
   quizQuestions?: Question[];
   assignmentInstructions?: string;
   fileUrl?: string;
+  // Client only, not sent to backend
+  videoFile?: File;
+  fileFile?: File;
 };
 
 type Lesson = {
@@ -91,14 +97,21 @@ type Lesson = {
 type Section = {
   id: string;
   title: string;
+  description?: string;
   lessons: Lesson[];
 };
 
-type PriceTier = {
-  id: string;
-  name: string;
+type OneTimePricing = {
   price: number;
-  interval: "one_time" | "monthly" | "yearly";
+  discountPercent: number;
+};
+
+type SubscriptionTier = {
+  id: string;
+  interval: SubscriptionInterval;
+  price: number;
+  discountPercent: number;
+  isActive: boolean;
 };
 
 const initialDraft = {
@@ -110,7 +123,8 @@ const initialDraft = {
   tags: [] as string[],
   difficulty: "beginner" as "beginner" | "intermediate" | "advanced",
   language: "English",
-  thumbnail: null as string | null,
+  thumbnailFile: null as File | null,
+  thumbnailPreview: null as string | null,
   promoVideo: "",
   badge: "",
   slug: "",
@@ -121,8 +135,8 @@ const initialDraft = {
   audience: [] as string[],
   sections: [] as Section[],
   priceModel: "onetime" as PriceModel,
-  priceTiers: [] as PriceTier[],
-  discountPercent: 0,
+  oneTimePricing: { price: 0, discountPercent: 0 } as OneTimePricing,
+  subscriptionTiers: [] as SubscriptionTier[],
   couponCode: "",
   enrollmentLimit: 0,
   prerequisites: [] as string[],
@@ -133,7 +147,7 @@ const initialDraft = {
   instructorBio: "",
   integrations: [] as string[],
   courseLevel: "all" as "all" | "beginner" | "intermediate" | "advanced",
-  publishStatus: "draft" as "draft" | "published",
+  status: "draft" as "draft" | "published",
 };
 
 // ─── Steps ───────────────────────────────────────────────
@@ -156,8 +170,8 @@ export default function CreateCoursePage() {
   const [objectiveInput, setObjectiveInput] = useState("");
   const [requirementInput, setRequirementInput] = useState("");
   const [audienceInput, setAudienceInput] = useState("");
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [expandedLesson, setExpandedLesson] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const update = (patch: Partial<typeof initialDraft>) =>
     setDraft((prev) => ({ ...prev, ...patch }));
@@ -203,9 +217,11 @@ export default function CreateCoursePage() {
     if (file) {
       const reader = new FileReader();
       reader.onload = () => {
-        const result = reader.result as string;
-        setThumbnailPreview(result);
-        update({ thumbnail: result });
+        setDraft((prev) => ({
+          ...prev,
+          thumbnailFile: file,
+          thumbnailPreview: reader.result as string,
+        }));
       };
       reader.readAsDataURL(file);
     }
@@ -323,28 +339,163 @@ export default function CreateCoursePage() {
     updateLesson(sectionId, lessonId, { content: { ...lesson.content, quizQuestions: questions } });
   };
 
-  // ── Pricing ────────────────────────────────────────────
-  const addPriceTier = () =>
+  // ── Pricing helpers ────────────────────────────────────
+  const addSubscriptionTier = (interval: SubscriptionInterval) => {
+    if (draft.subscriptionTiers.some((t) => t.interval === interval)) {
+      toast.error(`Tier for ${interval} already exists`);
+      return;
+    }
+    const newTier: SubscriptionTier = {
+      id: `tier_${Date.now()}`,
+      interval,
+      price: 0,
+      discountPercent: 0,
+      isActive: true,
+    };
+    update({ subscriptionTiers: [...draft.subscriptionTiers, newTier] });
+  };
+  const updateSubscriptionTier = (id: string, patch: Partial<SubscriptionTier>) =>
     update({
-      priceTiers: [
-        ...draft.priceTiers,
-        { id: `tier_${Date.now()}`, name: "Standard", price: 0, interval: "one_time" },
-      ],
+      subscriptionTiers: draft.subscriptionTiers.map((t) =>
+        t.id === id ? { ...t, ...patch } : t
+      ),
     });
-  const updatePriceTier = (id: string, patch: Partial<PriceTier>) =>
-    update({ priceTiers: draft.priceTiers.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
-  const removePriceTier = (id: string) =>
-    update({ priceTiers: draft.priceTiers.filter((t) => t.id !== id) });
+  const removeSubscriptionTier = (id: string) =>
+    update({
+      subscriptionTiers: draft.subscriptionTiers.filter((t) => t.id !== id),
+    });
 
-  // ── Save / Publish ────────────────────────────────────
-  const handleSaveDraft = () => {
-    toast.success("Draft saved!");
-    router.push("/teacher/courses");
+  const updateOneTimePricing = (patch: Partial<OneTimePricing>) =>
+    update({ oneTimePricing: { ...draft.oneTimePricing, ...patch } });
+
+  // ── Save / Publish (API integration) ──────────────────
+  const buildPayload = () => {
+    const sections = draft.sections.map((section) => ({
+      ...section,
+      lessons: section.lessons.map((lesson) => {
+        const { videoFile, fileFile, ...contentWithoutFiles } = lesson.content;
+        return {
+          ...lesson,
+          content: contentWithoutFiles,
+        };
+      }),
+    }));
+
+    const payload: any = {
+      title: draft.title,
+      subtitle: draft.subtitle,
+      description: draft.description,
+      category: draft.category,
+      subcategory: draft.subcategory,
+      tags: draft.tags,
+      difficulty: draft.difficulty,
+      language: draft.language,
+      promoVideo: draft.promoVideo,
+      badge: draft.badge,
+      slug: draft.slug,
+      seoTitle: draft.seoTitle,
+      seoDescription: draft.seoDescription,
+      learningObjectives: draft.learningObjectives,
+      requirements: draft.requirements,
+      audience: draft.audience,
+      sections,
+      priceModel: draft.priceModel,
+      couponCode: draft.couponCode,
+      enrollmentLimit: draft.enrollmentLimit,
+      prerequisites: draft.prerequisites,
+      certificateEnabled: draft.certificateEnabled,
+      certificateTemplate: draft.certificateTemplate,
+      completionCriteria: draft.completionCriteria,
+      accessDuration: draft.accessDuration,
+      instructorBio: draft.instructorBio,
+      integrations: draft.integrations,
+      courseLevel: draft.courseLevel,
+      status: draft.status,
+    };
+
+    if (draft.priceModel === "onetime") {
+      payload.oneTimePricing = {
+        price: draft.oneTimePricing.price,
+        currency: "USD",
+        discountPercent: draft.oneTimePricing.discountPercent,
+      };
+    } else if (draft.priceModel === "subscription") {
+      payload.subscriptionTiers = draft.subscriptionTiers
+        .filter((t) => t.isActive)
+        .map((t) => ({
+          id: t.id,
+          interval: t.interval,
+          price: t.price,
+          discountPercent: t.discountPercent,
+          isActive: t.isActive,
+        }));
+    }
+
+    return payload;
   };
-  const handlePublish = () => {
-    toast.success("Course published successfully!");
-    router.push("/teacher/courses");
+
+  const uploadThumbnail = async (courseId: string) => {
+    if (!draft.thumbnailFile) return;
+    const formData = new FormData();
+    formData.append("file", draft.thumbnailFile);
+    await api.post(`/courses/${courseId}/thumbnail`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
   };
+
+  const uploadLessonMedia = async (courseId: string) => {
+    for (const section of draft.sections) {
+      for (const lesson of section.lessons) {
+        if (lesson.content.videoFile) {
+          const formData = new FormData();
+          formData.append("file", lesson.content.videoFile);
+          await api.post(
+            `/courses/${courseId}/sections/${section.id}/lessons/${lesson.id}/video`,
+            formData,
+            { headers: { "Content-Type": "multipart/form-data" } }
+          );
+        }
+        if (lesson.content.fileFile) {
+          const formData = new FormData();
+          formData.append("file", lesson.content.fileFile);
+          await api.post(
+            `/courses/${courseId}/sections/${section.id}/lessons/${lesson.id}/file`,
+            formData,
+            { headers: { "Content-Type": "multipart/form-data" } }
+          );
+        }
+      }
+    }
+  };
+
+  const handleSave = async (publish = false) => {
+    if (!draft.title.trim() || !draft.description.trim() || !draft.category) {
+      toast.error("Please fill in required fields (Title, Description, Category)");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = buildPayload();
+      payload.status = publish ? "published" : "draft";
+
+      const response = await api.post("/courses", payload);
+      const courseId = response.data.data._id;
+
+      await uploadThumbnail(courseId);
+      await uploadLessonMedia(courseId);
+
+      toast.success(publish ? "Course published successfully!" : "Draft saved!");
+      router.push("/teacher/courses");
+    } catch (error: any) {
+      console.error("Save error:", error);
+      toast.error(error?.response?.data?.message || "Failed to save course");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveDraft = () => handleSave(false);
+  const handlePublish = () => handleSave(true);
 
   // ── Method Selection Screen ────────────────────────────
   if (!method) {
@@ -369,11 +520,9 @@ export default function CreateCoursePage() {
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 transition-transform group-hover:scale-110">
                 <PencilRuler className="h-7 w-7" />
               </div>
-              <h2 className="mt-6 text-2xl font-bold text-slate-900">
-                Build Manually
-              </h2>
+              <h2 className="mt-6 text-2xl font-bold text-slate-900">Build Manually</h2>
               <p className="mt-3 text-sm leading-6 text-slate-500">
-                Full control over every lesson, quiz, and setting. Perfect for creators who know exactly what they want.
+                Full control over every lesson, quiz, and setting.
               </p>
               <div className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-amber-600">
                 Start building
@@ -386,18 +535,12 @@ export default function CreateCoursePage() {
               disabled
               className="relative rounded-3xl border-2 border-slate-200 bg-white/50 p-8 text-left opacity-70 cursor-not-allowed"
             >
-              <Badge className="absolute top-4 right-4 bg-slate-200 text-slate-600">
-                Coming soon
-              </Badge>
+              <Badge className="absolute top-4 right-4 bg-slate-200 text-slate-600">Coming soon</Badge>
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
                 <LayoutTemplate className="h-7 w-7" />
               </div>
-              <h2 className="mt-6 text-2xl font-bold text-slate-600">
-                Use Templates
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-400">
-                Start with a professionally designed course structure and customize it to your brand.
-              </p>
+              <h2 className="mt-6 text-2xl font-bold text-slate-600">Use Templates</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-400">Professionally designed structures.</p>
             </button>
 
             {/* AI */}
@@ -405,18 +548,12 @@ export default function CreateCoursePage() {
               disabled
               className="relative rounded-3xl border-2 border-slate-200 bg-white/50 p-8 text-left opacity-70 cursor-not-allowed"
             >
-              <Badge className="absolute top-4 right-4 bg-slate-200 text-slate-600">
-                Coming soon
-              </Badge>
+              <Badge className="absolute top-4 right-4 bg-slate-200 text-slate-600">Coming soon</Badge>
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
                 <Sparkles className="h-7 w-7" />
               </div>
-              <h2 className="mt-6 text-2xl font-bold text-slate-600">
-                Generate with AI
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-400">
-                Describe your course idea and let AI create the outline, lessons, and quizzes for you.
-              </p>
+              <h2 className="mt-6 text-2xl font-bold text-slate-600">Generate with AI</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-400">AI‑created outlines and quizzes.</p>
             </button>
           </div>
         </div>
@@ -440,11 +577,13 @@ export default function CreateCoursePage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleSaveDraft}>
-              <Save className="mr-2 h-4 w-4" /> Save Draft
+            <Button variant="outline" onClick={handleSaveDraft} disabled={saving}>
+              {saving ? "Saving..." : "Save Draft"}
             </Button>
             {activeStep === "publish" ? (
-              <Button onClick={handlePublish}>Publish Course</Button>
+              <Button onClick={handlePublish} disabled={saving}>
+                {saving ? "Publishing..." : "Publish Course"}
+              </Button>
             ) : (
               <Button onClick={() => setActiveStep("publish")}>Review & Publish</Button>
             )}
@@ -468,11 +607,7 @@ export default function CreateCoursePage() {
                       : "bg-white text-slate-600 hover:bg-slate-100"
                   }`}
                 >
-                  {isCompleted ? (
-                    <Check className="h-4 w-4" />
-                  ) : (
-                    <step.icon className="h-4 w-4" />
-                  )}
+                  {isCompleted ? <Check className="h-4 w-4" /> : <step.icon className="h-4 w-4" />}
                   <span className="hidden sm:inline">{step.label}</span>
                 </button>
                 {index < steps.length - 1 && (
@@ -519,9 +654,7 @@ export default function CreateCoursePage() {
                   <div>
                     <Label>Category</Label>
                     <Select value={draft.category} onValueChange={(v) => update({ category: v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="development">Development</SelectItem>
                         <SelectItem value="design">Design</SelectItem>
@@ -533,18 +666,12 @@ export default function CreateCoursePage() {
                   </div>
                   <div>
                     <Label>Subcategory</Label>
-                    <Input
-                      value={draft.subcategory}
-                      onChange={(e) => update({ subcategory: e.target.value })}
-                      placeholder="e.g. Web Development"
-                    />
+                    <Input value={draft.subcategory} onChange={(e) => update({ subcategory: e.target.value })} placeholder="e.g. Web Development" />
                   </div>
                   <div>
                     <Label>Difficulty</Label>
                     <Select value={draft.difficulty} onValueChange={(v) => update({ difficulty: v as any })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="beginner">Beginner</SelectItem>
                         <SelectItem value="intermediate">Intermediate</SelectItem>
@@ -555,9 +682,7 @@ export default function CreateCoursePage() {
                   <div>
                     <Label>Language</Label>
                     <Select value={draft.language} onValueChange={(v) => update({ language: v })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="English">English</SelectItem>
                         <SelectItem value="Spanish">Spanish</SelectItem>
@@ -594,7 +719,7 @@ export default function CreateCoursePage() {
                     </div>
                   </div>
                   <div>
-                    <Label>{`Badge (e.g., "Best Seller", "New")`}</Label>
+                    <Label>Badge</Label>
                     <Input value={draft.badge} onChange={(e) => update({ badge: e.target.value })} placeholder="Optional" />
                   </div>
                 </div>
@@ -607,8 +732,8 @@ export default function CreateCoursePage() {
                     <Label>Thumbnail Image</Label>
                     <div className="mt-2 flex items-center gap-4">
                       <div className="flex h-24 w-40 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50">
-                        {thumbnailPreview ? (
-                          <img src={thumbnailPreview} alt="Thumbnail" className="h-full w-full object-cover" />
+                        {draft.thumbnailPreview ? (
+                          <img src={draft.thumbnailPreview} alt="Thumbnail" className="h-full w-full object-cover" />
                         ) : (
                           <ImageIcon className="h-6 w-6 text-slate-400" />
                         )}
@@ -623,7 +748,7 @@ export default function CreateCoursePage() {
                     </div>
                   </div>
                   <div>
-                    <Label>Promo Video URL (YouTube, Vimeo)</Label>
+                    <Label>Promo Video URL</Label>
                     <Input value={draft.promoVideo} onChange={(e) => update({ promoVideo: e.target.value })} placeholder="https://youtube.com/..." />
                   </div>
                 </div>
@@ -632,6 +757,7 @@ export default function CreateCoursePage() {
               <div className="rounded-2xl bg-white p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-slate-900">Learning Objectives, Requirements, Audience</h2>
                 <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  {/* Objectives */}
                   <div>
                     <Label>Learning Objectives</Label>
                     <div className="flex gap-2">
@@ -644,6 +770,7 @@ export default function CreateCoursePage() {
                       ))}
                     </div>
                   </div>
+                  {/* Requirements */}
                   <div>
                     <Label>Requirements</Label>
                     <div className="flex gap-2">
@@ -656,6 +783,7 @@ export default function CreateCoursePage() {
                       ))}
                     </div>
                   </div>
+                  {/* Audience */}
                   <div>
                     <Label>Audience</Label>
                     <div className="flex gap-2">
@@ -674,31 +802,20 @@ export default function CreateCoursePage() {
               <div className="rounded-2xl bg-white p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-slate-900">SEO</h2>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label>Slug</Label>
-                    <Input value={draft.slug} onChange={(e) => update({ slug: e.target.value })} placeholder="course-slug" />
-                  </div>
-                  <div>
-                    <Label>Meta Title</Label>
-                    <Input value={draft.seoTitle} onChange={(e) => update({ seoTitle: e.target.value })} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label>Meta Description</Label>
-                    <Textarea value={draft.seoDescription} onChange={(e) => update({ seoDescription: e.target.value })} rows={2} />
-                  </div>
+                  <div><Label>Slug</Label><Input value={draft.slug} onChange={(e) => update({ slug: e.target.value })} placeholder="course-slug" /></div>
+                  <div><Label>Meta Title</Label><Input value={draft.seoTitle} onChange={(e) => update({ seoTitle: e.target.value })} /></div>
+                  <div className="sm:col-span-2"><Label>Meta Description</Label><Textarea value={draft.seoDescription} onChange={(e) => update({ seoDescription: e.target.value })} rows={2} /></div>
                 </div>
               </div>
             </>
           )}
 
-          {/* CURRICULUM STEP */}
+          {/* CURRICULUM STEP (unchanged UI but with new content file handling) */}
           {activeStep === "curriculum" && (
             <>
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">Course Curriculum</h2>
-                <Button onClick={addSection}>
-                  <Plus className="mr-2 h-4 w-4" /> Add Section
-                </Button>
+                <Button onClick={addSection}><Plus className="mr-2 h-4 w-4" /> Add Section</Button>
               </div>
               {draft.sections.length === 0 ? (
                 <div className="rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center">
@@ -711,12 +828,7 @@ export default function CreateCoursePage() {
                     <div key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="flex items-center gap-2">
                         <GripVertical className="h-5 w-5 text-slate-300 cursor-grab" />
-                        <Input
-                          value={section.title}
-                          onChange={(e) => updateSectionTitle(section.id, e.target.value)}
-                          className="font-medium"
-                          placeholder="Section title"
-                        />
+                        <Input value={section.title} onChange={(e) => updateSectionTitle(section.id, e.target.value)} className="font-medium" placeholder="Section title" />
                         <Button variant="ghost" size="icon" onClick={() => moveSection(section.id, "up")}><ArrowUp className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => moveSection(section.id, "down")}><ArrowDown className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => removeSection(section.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
@@ -727,12 +839,7 @@ export default function CreateCoursePage() {
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                               <div className="flex items-center gap-2 flex-1">
                                 <GripVertical className="h-4 w-4 text-slate-300 cursor-grab" />
-                                <Input
-                                  value={lesson.title}
-                                  onChange={(e) => updateLesson(section.id, lesson.id, { title: e.target.value })}
-                                  className="h-9"
-                                  placeholder="Lesson title"
-                                />
+                                <Input value={lesson.title} onChange={(e) => updateLesson(section.id, lesson.id, { title: e.target.value })} className="h-9" placeholder="Lesson title" />
                                 <Select value={lesson.type} onValueChange={(v) => updateLesson(section.id, lesson.id, { type: v as LessonType })}>
                                   <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
                                   <SelectContent>
@@ -743,11 +850,7 @@ export default function CreateCoursePage() {
                                     <SelectItem value="file">File</SelectItem>
                                   </SelectContent>
                                 </Select>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setExpandedLesson(expandedLesson === lesson.id ? null : lesson.id)}
-                                >
+                                <Button variant="ghost" size="icon" onClick={() => setExpandedLesson(expandedLesson === lesson.id ? null : lesson.id)}>
                                   {expandedLesson === lesson.id ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </Button>
                               </div>
@@ -761,7 +864,16 @@ export default function CreateCoursePage() {
                               <div className="mt-4 space-y-4">
                                 {lesson.type === "video" && (
                                   <div className="space-y-3">
-                                    <div><Label>Video URL (MP4, YouTube, Vimeo)</Label><Input value={lesson.content.videoUrl || ""} onChange={(e) => updateLesson(section.id, lesson.id, { content: { ...lesson.content, videoUrl: e.target.value } })} placeholder="https://..." /></div>
+                                    <div><Label>Video Upload</Label>
+                                      <input type="file" accept="video/*" onChange={(e) => {
+                                        if (e.target.files?.[0]) updateLesson(section.id, lesson.id, { content: { ...lesson.content, videoFile: e.target.files[0] } });
+                                      }} className="hidden" id={`video-${lesson.id}`} />
+                                      <label htmlFor={`video-${lesson.id}`}>
+                                        <Button variant="outline" size="sm" asChild><span>Choose Video</span></Button>
+                                      </label>
+                                      {lesson.content.videoFile && <p className="text-xs mt-1">{lesson.content.videoFile.name}</p>}
+                                    </div>
+                                    <div><Label>Video URL (alternative)</Label><Input value={lesson.content.videoUrl || ""} onChange={(e) => updateLesson(section.id, lesson.id, { content: { ...lesson.content, videoUrl: e.target.value } })} placeholder="https://..." /></div>
                                     <div><Label>Or Embed Code</Label><Textarea value={lesson.content.videoEmbed || ""} onChange={(e) => updateLesson(section.id, lesson.id, { content: { ...lesson.content, videoEmbed: e.target.value } })} rows={2} placeholder="<iframe ...>" /></div>
                                     <div className="flex items-center gap-4"><Label>Duration (minutes)</Label><Input type="number" value={lesson.duration || 0} onChange={(e) => updateLesson(section.id, lesson.id, { duration: Number(e.target.value) })} className="w-24" /></div>
                                   </div>
@@ -807,7 +919,11 @@ export default function CreateCoursePage() {
                                   </div>
                                 )}
                                 {lesson.type === "assignment" && <div><Label>Assignment Instructions</Label><Textarea value={lesson.content.assignmentInstructions || ""} onChange={(e) => updateLesson(section.id, lesson.id, { content: { ...lesson.content, assignmentInstructions: e.target.value } })} rows={4} placeholder="Describe what students need to submit..." /></div>}
-                                {lesson.type === "file" && <div><Label>File Upload</Label><Input type="file" onChange={(e) => { if (e.target.files?.[0]) updateLesson(section.id, lesson.id, { content: { ...lesson.content, fileUrl: URL.createObjectURL(e.target.files[0]) } }); }} /></div>}
+                                {lesson.type === "file" && <div><Label>File Upload</Label>
+                                  <input type="file" onChange={(e) => { if (e.target.files?.[0]) updateLesson(section.id, lesson.id, { content: { ...lesson.content, fileFile: e.target.files[0] } }); }} className="hidden" id={`file-${lesson.id}`} />
+                                  <label htmlFor={`file-${lesson.id}`}><Button variant="outline" size="sm" asChild><span>Choose File</span></Button></label>
+                                  {lesson.content.fileFile && <p className="text-xs mt-1">{lesson.content.fileFile.name}</p>}
+                                </div>}
                                 <div className="flex flex-wrap items-center gap-4">
                                   <div className="flex items-center gap-2"><Switch checked={lesson.freePreview} onCheckedChange={(c) => updateLesson(section.id, lesson.id, { freePreview: c })} /><Label>Free Preview</Label></div>
                                   <div className="flex items-center gap-2"><Label>Drip (days)</Label><Input type="number" min="0" value={lesson.dripDays} onChange={(e) => updateLesson(section.id, lesson.id, { dripDays: Number(e.target.value) })} className="w-20" /></div>
@@ -825,7 +941,7 @@ export default function CreateCoursePage() {
             </>
           )}
 
-          {/* PRICING STEP */}
+          {/* PRICING STEP (updated for new pricing models) */}
           {activeStep === "pricing" && (
             <>
               <div className="rounded-2xl bg-white p-6 shadow-sm">
@@ -839,25 +955,52 @@ export default function CreateCoursePage() {
                       <SelectItem value="subscription">Subscription</SelectItem>
                     </SelectContent>
                   </Select>
-                  {draft.priceModel !== "free" && (
-                    <div className="space-y-2">
-                      <Label>Price Tiers</Label>
-                      {draft.priceTiers.map((tier) => (
-                        <div key={tier.id} className="flex flex-wrap items-center gap-2">
-                          <Input value={tier.name} onChange={(e) => updatePriceTier(tier.id, { name: e.target.value })} className="w-32" placeholder="Tier name" />
-                          <Input type="number" value={tier.price} onChange={(e) => updatePriceTier(tier.id, { price: Number(e.target.value) })} className="w-24" placeholder="Price" />
-                          <Select value={tier.interval} onValueChange={(v) => updatePriceTier(tier.id, { interval: v as any })}>
-                            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+
+                  {draft.priceModel === "onetime" && (
+                    <div className="space-y-3">
+                      <Label>One‑time Price</Label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input type="number" value={draft.oneTimePricing.price} onChange={(e) => updateOneTimePricing({ price: Number(e.target.value) })} className="w-32" placeholder="Price" />
+                        <div className="flex items-center gap-2">
+                          <Label>Discount (%)</Label>
+                          <Input type="number" min="0" max="100" value={draft.oneTimePricing.discountPercent} onChange={(e) => updateOneTimePricing({ discountPercent: Number(e.target.value) })} className="w-20" />
+                        </div>
+                      </div>
+                      {draft.oneTimePricing.discountPercent > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          Final price: ${(draft.oneTimePricing.price * (1 - draft.oneTimePricing.discountPercent / 100)).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {draft.priceModel === "subscription" && (
+                    <div className="space-y-4">
+                      <Label>Subscription Tiers</Label>
+                      {draft.subscriptionTiers.map((tier) => (
+                        <div key={tier.id} className="flex flex-wrap items-center gap-2 border p-3 rounded-lg">
+                          <Select value={tier.interval} onValueChange={(v) => updateSubscriptionTier(tier.id, { interval: v as SubscriptionInterval })}>
+                            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="one_time">One‑time</SelectItem>
+                              <SelectItem value="weekly">Weekly</SelectItem>
                               <SelectItem value="monthly">Monthly</SelectItem>
                               <SelectItem value="yearly">Yearly</SelectItem>
                             </SelectContent>
                           </Select>
-                          <Button variant="ghost" size="icon" onClick={() => removePriceTier(tier.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                          <Input type="number" value={tier.price} onChange={(e) => updateSubscriptionTier(tier.id, { price: Number(e.target.value) })} className="w-24" placeholder="Price" />
+                          <div className="flex items-center gap-2">
+                            <Label>Discount (%)</Label>
+                            <Input type="number" min="0" max="100" value={tier.discountPercent} onChange={(e) => updateSubscriptionTier(tier.id, { discountPercent: Number(e.target.value) })} className="w-20" />
+                          </div>
+                          <Switch checked={tier.isActive} onCheckedChange={(c) => updateSubscriptionTier(tier.id, { isActive: c })} />
+                          <Button variant="ghost" size="icon" onClick={() => removeSubscriptionTier(tier.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
                         </div>
                       ))}
-                      <Button variant="outline" size="sm" onClick={addPriceTier}><Plus className="mr-1 h-3 w-3" /> Add Tier</Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => addSubscriptionTier("weekly")}><Plus className="mr-1 h-3 w-3" /> Weekly</Button>
+                        <Button variant="outline" size="sm" onClick={() => addSubscriptionTier("monthly")}><Plus className="mr-1 h-3 w-3" /> Monthly</Button>
+                        <Button variant="outline" size="sm" onClick={() => addSubscriptionTier("yearly")}><Plus className="mr-1 h-3 w-3" /> Yearly</Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -866,7 +1009,6 @@ export default function CreateCoursePage() {
               <div className="rounded-2xl bg-white p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-slate-900">Discounts & Enrollment</h2>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div><Label>Discount (%)</Label><Input type="number" min="0" max="100" value={draft.discountPercent} onChange={(e) => update({ discountPercent: Number(e.target.value) })} /></div>
                   <div><Label>Coupon Code</Label><Input value={draft.couponCode} onChange={(e) => update({ couponCode: e.target.value })} /></div>
                   <div><Label>Enrollment Limit (0 = unlimited)</Label><Input type="number" min="0" value={draft.enrollmentLimit} onChange={(e) => update({ enrollmentLimit: Number(e.target.value) })} /></div>
                 </div>
@@ -879,7 +1021,7 @@ export default function CreateCoursePage() {
             </>
           )}
 
-          {/* SETTINGS STEP */}
+          {/* SETTINGS STEP (unchanged) */}
           {activeStep === "settings" && (
             <>
               <div className="rounded-2xl bg-white p-6 shadow-sm">
@@ -925,7 +1067,7 @@ export default function CreateCoursePage() {
             </>
           )}
 
-          {/* PUBLISH STEP */}
+          {/* PUBLISH STEP (updated to show pricing info) */}
           {activeStep === "publish" && (
             <div className="rounded-2xl bg-white p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-slate-900">Review & Publish</h2>
@@ -933,11 +1075,17 @@ export default function CreateCoursePage() {
                 <p><span className="font-medium">Title:</span> {draft.title || "—"}</p>
                 <p><span className="font-medium">Sections:</span> {draft.sections.length}</p>
                 <p><span className="font-medium">Price Model:</span> {draft.priceModel}</p>
-                <p><span className="font-medium">Status:</span> {draft.publishStatus}</p>
+                {draft.priceModel === "onetime" && (
+                  <p><span className="font-medium">Price:</span> ${draft.oneTimePricing.price}</p>
+                )}
+                {draft.priceModel === "subscription" && (
+                  <p><span className="font-medium">Tiers:</span> {draft.subscriptionTiers.filter(t => t.isActive).map(t => `${t.interval} ($${t.price})`).join(", ") || "None"}</p>
+                )}
+                <p><span className="font-medium">Status:</span> {draft.status}</p>
               </div>
               <div className="mt-6 flex gap-3">
-                <Button variant="outline" onClick={handleSaveDraft}>Save Draft</Button>
-                <Button onClick={handlePublish}>Publish Course</Button>
+                <Button variant="outline" onClick={handleSaveDraft} disabled={saving}>Save Draft</Button>
+                <Button onClick={handlePublish} disabled={saving}>Publish Course</Button>
               </div>
             </div>
           )}
