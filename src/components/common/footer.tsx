@@ -25,11 +25,11 @@ const Footer = (props: Props) => {
             ></Link>
             <div className="mt-6 flex flex-col gap-3">
               <Link
-                href={"mailto:coursehub@gmail.com"}
+                href={"mailto:contact@paslearn.com"}
                 className="flex items-center gap-2"
               >
                 <Mail size={15} />
-                <span className="text-sm">coursehub@gamil.com</span>
+                <span className="text-sm">contact@paslearn.com</span>
               </Link>
               <Link
                 href={"tel:+212522675423"}
@@ -43,7 +43,7 @@ const Footer = (props: Props) => {
                 className="flex items-center gap-2"
               >
                 <MapPinIcon size={15} />
-                <span className="text-sm">Somewhere in Morocco</span>
+                <span className="text-sm">Paris, France</span>
               </Link>
             </div>
           </div>
@@ -55,7 +55,7 @@ const Footer = (props: Props) => {
                 <Link href={""}>Benefits</Link>
               </li>
               <li>
-                <Link href={""}>Our Courses</Link>
+                <Link href={"/marketplace"}>Our Courses</Link>
               </li>
               <li>
                 <Link href={""}>Our Testimonials</Link>
@@ -70,7 +70,7 @@ const Footer = (props: Props) => {
             <Separator className="mb-3" />
             <ul>
               <li>
-                <Link href={""}>Company</Link>
+                <Link href={"/about-us"}>Company</Link>
               </li>
               <li>
                 <Link href={""}>Achievements</Link>

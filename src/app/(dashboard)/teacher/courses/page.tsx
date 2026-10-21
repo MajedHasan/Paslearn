@@ -227,7 +227,7 @@ export default function CoursesPage() {
             Manage your course catalog, track performance, and grow your business.
           </p>
         </div>
-        <Link href="/teacher/courses/create">
+        <Link href="/teacher/courses/new">
           <Button className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" /> Create Course
           </Button>
