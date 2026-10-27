@@ -112,7 +112,7 @@ export default function MarketplacePage() {
       };
       Object.keys(params).forEach((key) => params[key] === undefined && delete params[key]);
 
-      const response = await api.get("/courses", { params });
+      const response = await api.get("/courses?status=published", { params });
       setCourses(response.data.data);
       setTotal(response.data.total);
     } catch (err: any) {
