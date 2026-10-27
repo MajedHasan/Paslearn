@@ -36,3 +36,19 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
 
 ## Used Our Hostinger Database for MySQL Database
+
+
+
+
+
+
+
+
+
+
+## For the Next 30th Oct (Next Friday Meeting)
+For the teacher, they don't need to pay any transaction fees if the students is his own student.
+He only needs to pay transaction fees 2% from the orders he get from our platform, and applicable if he get more than 25 orders
+### Course Module
+Needs to be able to create and sell the courses with the coupon code
+### Digital files also need to be done for selling

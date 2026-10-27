@@ -164,9 +164,9 @@ export default function CoursesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this course?")) return;
+    if (!confirm("Are you sure you want to delete this course? bla bla")) return;
     try {
-      await api.delete(`/courses/${id}`);
+      await api.delete(`/courses/${id}?hard=true`);
       toast.success("Course deleted");
       fetchCourses();
       fetchStats();
