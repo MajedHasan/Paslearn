@@ -1,523 +1,553 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  LayoutGrid,
-  List,
-  Plus,
-  Search,
-  BookOpen,
-  Users,
-  Star,
-  DollarSign,
-  Clock,
-  Edit,
-  BarChart3,
-  Copy,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUpDown,
-  CheckSquare,
-  Square,
-  Loader2,
-  AlertCircle,
+  LayoutGrid, List, Plus, Search, BookOpen, Users, Star, DollarSign,
+  Clock, Copy, Trash2, ChevronLeft, ChevronRight, Edit3, BarChart3,
+  CheckSquare, Square, PlayCircle, Archive, RotateCcw, Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import api from "@/lib/api";
+import {
+  CourseStatusBadge, EmptyState, ErrorState, LoadingState,
+  StatCard, priceLabel,
+} from "./_components/ui";
+import { DeleteCourseModal } from "./_components/delete-course-modal";
 
-// Types matching backend
-type CourseStatus = "draft" | "published" | "archived" | "under_review";
-type PriceModel = "free" | "onetime" | "subscription";
+type State = "active" | "archived" | "deleted";
 
 interface Course {
   _id: string;
   title: string;
+  subtitle?: string;
   description?: string;
-  thumbnailMediaId?: string | { url?: string };
-  status: CourseStatus;
-  priceModel: PriceModel;
-  price?: number;
-  students?: number;
-  rating?: number;
+  thumbnailMediaId?: string | { _id?: string; url?: string | null };
+  status: string;
+  priceModel: string;
+  oneTimePricing?: { price: number; currency: string };
+  subscriptionTiers?: Array<{ interval: string; price: number; isActive: boolean }>;
+  enrollmentCount?: number;
+  ratingAvg?: number;
+  ratingCount?: number;
   lessonsCount?: number;
+  sectionsCount?: number;
   updatedAt: string;
+  deletedAt?: string | null;
+  mediaRetentionUntil?: string | null;
 }
 
-interface Stats {
-  totalCourses: number;
-  publishedCourses: number;
-  totalStudents: number;
-  totalRevenue: number;
-  avgRating: number;
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+
+function thumbUrl(c: Course): string {
+  const t = c.thumbnailMediaId;
+  if (!t) return "";
+  if (typeof t === "object" && t.url) return t.url.startsWith("/") ? `${BACKEND}${t.url}` : t.url;
+  return "";
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  published: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  draft: "bg-amber-50 text-amber-700 border-amber-200",
-  archived: "bg-slate-100 text-slate-600 border-slate-200",
-  under_review: "bg-blue-50 text-blue-700 border-blue-200",
-};
-
-// Backend origin WITHOUT /api
-const BACKEND_ORIGIN = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+function daysLeft(iso?: string | null): number | null {
+  if (!iso) return null;
+  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
+}
 
 export default function CoursesPage() {
+  const router = useRouter();
+  const [state, setState] = useState<State>("active");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("-updatedAt");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("-updatedAt");
   const [page, setPage] = useState(1);
-  const [limit] = useState(9);
+  const limit = 9;
   const [courses, setCourses] = useState<Course[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [stats, setStats] = useState<any>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<Course | null>(null);
 
   const fetchCourses = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params: any = {
-        page,
-        limit,
-        sort: sortBy,
-        q: search || undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
-      };
-      Object.keys(params).forEach((key) => params[key] === undefined && delete params[key]);
-
-      const response = await api.get("/courses", { params });
-      setCourses(response.data.data);
-      setTotal(response.data.total);
-    } catch (err: any) {
-      console.error(err);
-      setError(err?.response?.data?.message || "Failed to load courses");
-      toast.error("Failed to load courses");
+      const params: any = { page, limit, sort: sortBy, state };
+      if (search) params.q = search;
+      if (statusFilter !== "all" && state === "active") params.status = statusFilter;
+      const r = await api.get("/teacher/courses", { params });
+      setCourses(r.data.data || []);
+      setTotal(r.data.total || 0);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to load courses");
     } finally {
       setLoading(false);
     }
-  }, [page, limit, sortBy, search, statusFilter]);
+  }, [page, sortBy, search, statusFilter, state]);
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await api.get("/courses/stats");
-      setStats(res.data.data);
-    } catch (err) {
-      console.error("Stats error", err);
-    }
+      setStats((await api.get("/teacher/courses/stats")).data.data);
+    } catch {}
   }, []);
 
-  useEffect(() => {
-    fetchCourses();
-  }, [fetchCourses]);
+  useEffect(() => { fetchCourses(); }, [fetchCourses]);
+  useEffect(() => { fetchStats(); }, [fetchStats]);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
-
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(1);
-      fetchCourses();
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [search, statusFilter, sortBy, fetchCourses]);
+    const t = setTimeout(() => { setPage(1); fetchCourses(); }, 400);
+    return () => clearTimeout(t);
+  }, [search, statusFilter, sortBy, state, fetchCourses]);
 
   const totalPages = Math.ceil(total / limit);
 
-  const toggleSelect = (id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    );
-  };
-
-  const toggleAll = () => {
-    if (selected.length === courses.length) {
-      setSelected([]);
-    } else {
-      setSelected(courses.map((c) => c._id));
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this course? bla bla")) return;
-    try {
-      await api.delete(`/courses/${id}?hard=true`);
-      toast.success("Course deleted");
-      fetchCourses();
-      fetchStats();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Delete failed");
-    }
-  };
-
   const handleDuplicate = async (id: string) => {
     try {
-      await api.post(`/courses/${id}/duplicate`);
+      await api.post(`/teacher/courses/${id}/duplicate`);
       toast.success("Course duplicated");
       fetchCourses();
       fetchStats();
-    } catch (err: any) {
+    } catch {
       toast.error("Duplicate failed");
     }
   };
 
   const handleBulkDelete = async () => {
-    if (selected.length === 0) return;
-    if (!confirm(`Delete ${selected.length} courses?`)) return;
+    if (!selected.length || !confirm(`Delete ${selected.length} course(s)?`)) return;
     try {
-      await api.post("/courses/bulk-delete", { ids: selected });
+      await api.post("/teacher/courses/bulk-delete", { ids: selected });
       setSelected([]);
-      toast.success("Courses deleted");
+      toast.success("Request submitted");
       fetchCourses();
       fetchStats();
-    } catch (err: any) {
+    } catch {
       toast.error("Bulk delete failed");
     }
   };
 
-  const displayedCountStart = (page - 1) * limit + 1;
-  const displayedCountEnd = Math.min(page * limit, total);
+  const toggleSelect = (id: string) =>
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
-  // Fix: Use BACKEND_ORIGIN (without /api) for media URLs
-  const getThumbnailUrl = (course: Course): string => {
-    if (!course.thumbnailMediaId) return "";
-    if (typeof course.thumbnailMediaId === "object") {
-      const url = course.thumbnailMediaId.url;
-      if (url) {
-        return url.startsWith("/") ? `${BACKEND_ORIGIN}${url}` : url;
-      }
-    } else if (typeof course.thumbnailMediaId === "string") {
-      return `${BACKEND_ORIGIN}/api/media/${course.thumbnailMediaId}/presigned-url`;
-    }
-    return "";
+  const onModalDone = () => {
+    setDeleteTarget(null);
+    fetchCourses();
+    fetchStats();
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">My Courses</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage your course catalog, track performance, and grow your business.
-          </p>
-        </div>
-        <Link href="/teacher/courses/new">
-          <Button className="w-full sm:w-auto">
-            <Plus className="mr-2 h-4 w-4" /> Create Course
-          </Button>
-        </Link>
-      </div>
-
-      {/* Stats */}
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={<BookOpen className="h-5 w-5" />} label="Published" value={stats?.publishedCourses.toString() || "0"} color="bg-emerald-100 text-emerald-600" />
-        <StatCard icon={<Users className="h-5 w-5" />} label="Total Students" value={stats?.totalStudents.toLocaleString() || "0"} color="bg-blue-100 text-blue-600" />
-        <StatCard icon={<DollarSign className="h-5 w-5" />} label="Revenue" value={`$${stats?.totalRevenue.toFixed(2) || "0.00"}`} color="bg-purple-100 text-purple-600" />
-        <StatCard icon={<BarChart3 className="h-5 w-5" />} label="Avg Rating" value={stats?.avgRating.toFixed(1) || "0.0"} color="bg-amber-100 text-amber-600" />
-      </div>
-
-      {/* Toolbar */}
-      <div className="mt-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {/* Search */}
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search courses..."
-              className="pl-9"
-            />
-          </div>
-          {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-              <SelectItem value="under_review">Under Review</SelectItem>
-            </SelectContent>
-          </Select>
-          {/* Sort */}
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-full sm:w-44">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="-updatedAt">Recently Updated</SelectItem>
-              <SelectItem value="title">Title A-Z</SelectItem>
-              <SelectItem value="-students">Most Students</SelectItem>
-              <SelectItem value="price">Price: High to Low</SelectItem>
-              <SelectItem value="-rating">Highest Rated</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {/* View Toggle */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setView("grid")}
-            className={`rounded-lg p-2 ${view === "grid" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setView("list")}
-            className={`rounded-lg p-2 ${view === "list" ? "bg-slate-900 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}
-          >
-            <List className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Bulk actions */}
-      {selected.length > 0 && (
-        <div className="mt-4 flex items-center gap-3 rounded-lg bg-slate-50 p-3">
-          <span className="text-sm text-slate-600">{selected.length} selected</span>
-          <Button size="sm" variant="outline" onClick={() => {}}><Copy className="mr-1 h-4 w-4" /> Duplicate</Button>
-          <Button size="sm" variant="destructive" onClick={handleBulkDelete}><Trash2 className="mr-1 h-4 w-4" /> Delete</Button>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="mt-6 flex items-center gap-2 rounded-lg bg-red-50 p-4 text-red-700">
-          <AlertCircle className="h-5 w-5" />
-          <p>{error}</p>
-        </div>
-      )}
-
-      {/* Loading */}
-      {loading ? (
-        <div className="mt-10 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-        </div>
-      ) : (
-        <>
-          {/* Content */}
-          {view === "grid" ? (
-            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {courses.map((course) => (
-                <CourseCard
-                  key={course._id}
-                  course={course}
-                  selected={selected.includes(course._id)}
-                  onSelect={toggleSelect}
-                  onDelete={handleDelete}
-                  onDuplicate={handleDuplicate}
-                  getThumbnailUrl={getThumbnailUrl}
-                />
-              ))}
-              {courses.length === 0 && (
-                <div className="col-span-full flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 p-12 text-center">
-                  <BookOpen className="h-10 w-10 text-slate-300" />
-                  <h3 className="mt-4 text-lg font-semibold text-slate-900">No courses found</h3>
-                  <p className="text-sm text-slate-500">Try adjusting your filters or create a new course.</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="mt-6 overflow-hidden rounded-xl bg-white shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">
-                      <button onClick={toggleAll}>
-                        {selected.length === courses.length && courses.length > 0 ? (
-                          <CheckSquare className="h-4 w-4 text-slate-900" />
-                        ) : (
-                          <Square className="h-4 w-4 text-slate-400" />
-                        )}
-                      </button>
-                    </TableHead>
-                    <TableHead>Course</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Students</TableHead>
-                    <TableHead>Rating</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {courses.map((course) => (
-                    <TableRow key={course._id}>
-                      <TableCell>
-                        <button onClick={() => toggleSelect(course._id)}>
-                          {selected.includes(course._id) ? (
-                            <CheckSquare className="h-4 w-4 text-slate-900" />
-                          ) : (
-                            <Square className="h-4 w-4 text-slate-400" />
-                          )}
-                        </button>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          {getThumbnailUrl(course) ? (
-                            <img src={getThumbnailUrl(course)} alt={course.title} className="h-10 w-14 rounded-md object-cover" />
-                          ) : (
-                            <div className="h-10 w-14 rounded-md bg-slate-100 flex items-center justify-center">
-                              <BookOpen className="h-4 w-4 text-slate-400" />
-                            </div>
-                          )}
-                          <div>
-                            <p className="font-medium text-slate-900">{course.title}</p>
-                            <p className="text-xs text-slate-500">{course.lessonsCount ?? 0} lessons</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={STATUS_STYLES[course.status]}>{course.status}</Badge>
-                      </TableCell>
-                      <TableCell>{(course.students || 0).toLocaleString()}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                          <span>{(course.rating || 0).toFixed(1)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {course.priceModel === "free" ? "Free" : `$${(course.price || 0).toFixed(2)}`}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <button className="rounded-lg p-2 hover:bg-slate-100" onClick={() => window.location.href = `/teacher/courses/${course._id}/edit`}><Edit className="h-4 w-4 text-slate-500" /></button>
-                          <button className="rounded-lg p-2 hover:bg-slate-100"><BarChart3 className="h-4 w-4 text-slate-500" /></button>
-                          <button className="rounded-lg p-2 hover:bg-slate-100" onClick={() => handleDuplicate(course._id)}><Copy className="h-4 w-4 text-slate-500" /></button>
-                          <button className="rounded-lg p-2 hover:bg-red-50" onClick={() => handleDelete(course._id)}><Trash2 className="h-4 w-4 text-red-500" /></button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {courses.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center text-slate-500">No courses found</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="text-sm text-slate-500">
-                Showing {displayedCountStart}–{displayedCountEnd} of {total} courses
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-medium">{page} / {totalPages}</span>
-                <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(page + 1)}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="relative hidden sm:block">
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 opacity-20 blur-lg" />
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/25">
+                <BookOpen className="h-6 w-6" />
               </div>
             </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                Course Studio
+              </p>
+              <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+                My Courses
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+                Design world-class courses, track performance, and grow your teaching business.
+              </p>
+            </div>
+          </div>
+          <Link href="/teacher/courses/new">
+            <Button className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 font-semibold shadow-lg shadow-indigo-500/25 transition-all hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
+              <Plus className="mr-2 h-4 w-4" /> New Course
+            </Button>
+          </Link>
+        </div>
 
-// ─── Stat Card Helper ────────────────────────────────────
-function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
-  return (
-    <div className="flex items-center gap-4 rounded-xl bg-white p-4 shadow-sm">
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${color}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-xl font-bold text-slate-900">{value}</p>
-        <p className="text-xs text-slate-500">{label}</p>
-      </div>
-    </div>
-  );
-}
+        {/* Stats */}
+        <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard label="Published" value={stats?.publishedCourses ?? 0} icon={BookOpen} color="emerald"
+            hint={`${stats?.totalCourses ?? 0} total courses`} />
+          <StatCard label="Students Enrolled" value={stats?.totalStudents ?? 0} icon={Users} color="blue"
+            hint="Across all your courses" />
+          <StatCard label="Total Revenue" value={`$${(stats?.totalRevenue ?? 0).toFixed(2)}`} icon={DollarSign} color="violet"
+            hint="Lifetime earnings" />
+          <StatCard label="Avg Rating" value={(stats?.avgRating ?? 0).toFixed(1)} icon={Star} color="amber"
+            hint="Based on verified reviews" />
+        </div>
 
-// ─── Course Card Helper ──────────────────────────────────
-function CourseCard({
-  course,
-  selected,
-  onSelect,
-  onDelete,
-  onDuplicate,
-  getThumbnailUrl,
-}: {
-  course: Course;
-  selected: boolean;
-  onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
-  getThumbnailUrl: (course: Course) => string;
-}) {
-  const thumbnailUrl = getThumbnailUrl(course);
+        {/* State tabs */}
+        <div className="mt-8 flex gap-2 rounded-2xl border border-slate-200/60 bg-white/70 p-1.5 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/70">
+          {[
+            { key: "active", label: "Active", icon: BookOpen },
+            { key: "archived", label: "Archived", icon: Archive },
+            { key: "deleted", label: "Deleted", icon: Trash2 },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = state === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => { setState(tab.key as State); setPage(1); setSelected([]); }}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+                  active
+                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25"
+                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
 
-  return (
-    <div className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg">
-      <div className="relative aspect-video overflow-hidden bg-slate-100">
-        {thumbnailUrl ? (
-          <img src={thumbnailUrl} alt={course.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-slate-100">
-            <BookOpen className="h-8 w-8 text-slate-300" />
+        {/* Toolbar */}
+        <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-slate-200/60 bg-white/70 p-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/70 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search courses..."
+                className="h-10 rounded-xl border-slate-200 pl-9 dark:border-slate-700"
+              />
+            </div>
+            {state === "active" && (
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-10 w-full rounded-xl sm:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="published">Published</SelectItem>
+                  <SelectItem value="draft">Drafts</SelectItem>
+                  <SelectItem value="under_review">Under review</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="h-10 w-full rounded-xl sm:w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-updatedAt">Recently updated</SelectItem>
+                <SelectItem value="title">Title (A–Z)</SelectItem>
+                <SelectItem value="-enrollmentCount">Most students</SelectItem>
+                <SelectItem value="-oneTimePricing.price">Price (high → low)</SelectItem>
+                <SelectItem value="-ratingAvg">Highest rated</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+            <button
+              onClick={() => setView("grid")}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                view === "grid" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white" : "text-slate-500"
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setView("list")}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                view === "list" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white" : "text-slate-500"
+              }`}
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Bulk bar */}
+        {selected.length > 0 && state === "active" && (
+          <div className="mt-4 flex items-center justify-between rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-500/30 dark:bg-indigo-500/10">
+            <span className="text-sm font-medium text-indigo-900 dark:text-indigo-300">
+              {selected.length} selected
+            </span>
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setSelected([])}>Clear</Button>
+              <Button size="sm" variant="destructive" className="rounded-lg" onClick={handleBulkDelete}>
+                <Trash2 className="mr-1 h-4 w-4" /> Delete
+              </Button>
+            </div>
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        <div className="absolute left-3 top-3 flex items-center gap-2">
-          <button onClick={() => onSelect(course._id)} className="rounded-md bg-white/90 p-1.5 shadow-sm">
-            {selected ? <CheckSquare className="h-4 w-4 text-slate-900" /> : <Square className="h-4 w-4 text-slate-400" />}
-          </button>
-          <Badge variant="outline" className={STATUS_STYLES[course.status]}>{course.status}</Badge>
+
+        {/* Content */}
+        <div className="mt-6">
+          {loading ? (
+            <LoadingState label={`Loading ${state} courses...`} />
+          ) : error ? (
+            <ErrorState message={error} onRetry={fetchCourses} />
+          ) : courses.length === 0 ? (
+            <EmptyState
+              icon={state === "deleted" ? Trash2 : state === "archived" ? Archive : BookOpen}
+              title={
+                state === "active"
+                  ? "Your first course awaits"
+                  : state === "archived"
+                  ? "No archived courses"
+                  : "Nothing here"
+              }
+              description={
+                state === "active"
+                  ? "Build a course once and sell it forever. Start with a title and outline — add lessons as you go."
+                  : state === "archived"
+                  ? "Courses you archive will appear here. Students still keep access."
+                  : "Deleted courses appear here for 90 days with a media retention countdown."
+              }
+              action={
+                state === "active"
+                  ? { label: "Create your first course", href: "/teacher/courses/new", icon: Plus }
+                  : undefined
+              }
+            />
+          ) : view === "grid" ? (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {courses.map((c) => (
+                <GridCard
+                  key={c._id}
+                  course={c}
+                  state={state}
+                  selected={selected.includes(c._id)}
+                  onSelect={() => toggleSelect(c._id)}
+                  onEdit={() => router.push(`/teacher/courses/${c._id}/edit`)}
+                  onView={() => router.push(`/teacher/courses/${c._id}`)}
+                  onDuplicate={() => handleDuplicate(c._id)}
+                  onManage={() => setDeleteTarget(c)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <table className="w-full">
+                <thead className="border-b border-slate-200 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50">
+                  <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <th className="w-10 px-4 py-3"></th>
+                    <th className="px-4 py-3">Course</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Students</th>
+                    <th className="px-4 py-3">Rating</th>
+                    <th className="px-4 py-3">Price</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {courses.map((c) => (
+                    <tr
+                      key={c._id}
+                      className="group border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/50 dark:border-slate-800 dark:hover:bg-slate-800/30"
+                    >
+                      <td className="px-4 py-3">
+                        <button onClick={() => toggleSelect(c._id)} className="text-slate-400 hover:text-indigo-600">
+                          {selected.includes(c._id) ? (
+                            <CheckSquare className="h-4 w-4 text-indigo-600" />
+                          ) : (
+                            <Square className="h-4 w-4" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => router.push(`/teacher/courses/${c._id}`)}
+                          className="flex items-center gap-3 text-left"
+                        >
+                          <div className="h-11 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
+                            {thumbUrl(c) ? (
+                              <img src={thumbUrl(c)} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <PlayCircle className="h-4 w-4 text-slate-400" />
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="line-clamp-1 font-semibold text-slate-900 dark:text-white">{c.title}</p>
+                            <p className="text-xs text-slate-500">
+                              {c.lessonsCount ?? 0} lessons · {c.sectionsCount ?? 0} sections
+                            </p>
+                          </div>
+                        </button>
+                      </td>
+                      <td className="px-4 py-3"><CourseStatusBadge status={c.status} /></td>
+                      <td className="px-4 py-3 text-sm">{(c.enrollmentCount || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 text-sm">
+                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                          {(c.ratingAvg || 0).toFixed(1)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold">{priceLabel(c)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <button
+                            onClick={() => router.push(`/teacher/courses/${c._id}/edit`)}
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-800"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => router.push(`/teacher/courses/${c._id}`)}
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-800"
+                          >
+                            <BarChart3 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(c)}
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
+                          >
+                            {state === "deleted" ? <RotateCcw className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-        <div className="absolute bottom-3 right-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button className="rounded-lg bg-white/90 p-1.5 shadow-sm" onClick={() => window.location.href = `/teacher/courses/${course._id}/edit`}><Edit className="h-3.5 w-3.5 text-slate-700" /></button>
-          <button className="rounded-lg bg-white/90 p-1.5 shadow-sm"><BarChart3 className="h-3.5 w-3.5 text-slate-700" /></button>
-          <button className="rounded-lg bg-white/90 p-1.5 shadow-sm" onClick={() => onDuplicate(course._id)}><Copy className="h-3.5 w-3.5 text-slate-700" /></button>
-          <button className="rounded-lg bg-white/90 p-1.5 shadow-sm" onClick={() => onDelete(course._id)}><Trash2 className="h-3.5 w-3.5 text-red-500" /></button>
-        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-8 flex items-center justify-between">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total} courses
+            </p>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-3 text-sm font-medium text-slate-700 dark:text-slate-300">{page} / {totalPages}</span>
+              <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-lg">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
-      <div className="p-4">
-        <h3 className="line-clamp-1 font-semibold text-slate-900">{course.title}</h3>
-        <p className="mt-1 line-clamp-2 text-sm text-slate-500">{course.description || "No description"}</p>
-        <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
-          <span className="flex items-center gap-1"><Users className="h-4 w-4" /> {course.students?.toLocaleString() || 0}</span>
-          <span className="flex items-center gap-1"><Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {course.rating?.toFixed(1) || "0.0"}</span>
-          <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {course.lessonsCount || 0}</span>
+
+      <DeleteCourseModal
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        courseId={deleteTarget?._id || null}
+        courseTitle={deleteTarget?.title || ""}
+        onDone={onModalDone}
+      />
+    </div>
+  );
+}
+
+// ─── Grid card ──────────────────────────────────────────
+function GridCard({
+  course, state, selected, onSelect, onEdit, onView, onDuplicate, onManage,
+}: {
+  course: Course; state: State; selected: boolean;
+  onSelect: () => void; onEdit: () => void; onView: () => void;
+  onDuplicate: () => void; onManage: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const thumb = thumbUrl(course);
+  const retention = daysLeft(course.mediaRetentionUntil);
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="group relative overflow-hidden rounded-3xl border border-slate-200/60 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-2xl hover:shadow-indigo-500/10 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-500/30"
+    >
+      <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
+        {thumb ? (
+          <img
+            src={thumb}
+            alt={course.title}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <PlayCircle className="h-12 w-12 text-slate-300 dark:text-slate-600" />
+          </div>
+        )}
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between bg-gradient-to-b from-black/40 to-transparent p-3">
+          <CourseStatusBadge status={course.status} />
+          <button
+            onClick={onSelect}
+            className={`flex h-7 w-7 items-center justify-center rounded-lg backdrop-blur-md transition-colors ${
+              selected ? "bg-white text-indigo-600" : "bg-white/80 text-slate-600 hover:bg-white"
+            }`}
+          >
+            {selected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+          </button>
         </div>
-        <div className="mt-4 flex items-center justify-between">
-          <span className="font-bold text-slate-900">{course.priceModel === "free" ? "Free" : `$${course.price?.toFixed(2) || "0.00"}`}</span>
-          <span className="text-xs text-slate-400">Updated {formatDistanceToNow(new Date(course.updatedAt))} ago</span>
+        {retention !== null && (
+          <div className="absolute bottom-3 left-3 rounded-full bg-rose-600/95 px-2.5 py-1 text-[11px] font-semibold text-white shadow-lg">
+            <Calendar className="mr-1 inline h-3 w-3" />
+            Media expires in {retention}d
+          </div>
+        )}
+        {hover && (
+          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 backdrop-blur-sm">
+            <button
+              onClick={onEdit}
+              className="flex h-10 items-center gap-1.5 rounded-xl bg-white px-4 text-sm font-semibold text-slate-900 shadow-lg transition-transform hover:scale-105"
+            >
+              <Edit3 className="h-4 w-4" /> Edit
+            </button>
+            <button
+              onClick={onView}
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-900 shadow-lg transition-transform hover:scale-105"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="p-4">
+        <button onClick={onView} className="text-left">
+          <h3 className="line-clamp-1 text-base font-bold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
+            {course.title}
+          </h3>
+        </button>
+        <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-xs text-slate-500 dark:text-slate-400">
+          {course.subtitle || course.description || "No description yet"}
+        </p>
+
+        <div className="mt-4 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+          <span className="flex items-center gap-1">
+            <Users className="h-3.5 w-3.5" /> {(course.enrollmentCount || 0).toLocaleString()}
+          </span>
+          <span className="flex items-center gap-1">
+            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> {(course.ratingAvg || 0).toFixed(1)}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" /> {course.lessonsCount || 0} lessons
+          </span>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
+          <span className="text-base font-black text-slate-900 dark:text-white">{priceLabel(course)}</span>
+          <button
+            onClick={onManage}
+            className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
+              state === "deleted"
+                ? "text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-500/10"
+                : "text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+            }`}
+          >
+            {state === "deleted" ? (
+              <><RotateCcw className="mr-1 inline h-3 w-3" />Restore</>
+            ) : (
+              <><Trash2 className="mr-1 inline h-3 w-3" />Manage</>
+            )}
+          </button>
         </div>
       </div>
     </div>

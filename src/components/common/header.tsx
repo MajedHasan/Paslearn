@@ -73,6 +73,9 @@ const Header = (props: Props) => {
                     Home
                   </Link>
                   <Link href={"/marketplace"} className="hover:text-slate-400">
+                    Marketplace
+                  </Link>
+                  <Link href={"/courses"} className="hover:text-slate-400">
                     Courses
                   </Link>
                   <Link href={"/about-us"} className="hover:text-slate-400">
@@ -99,6 +102,9 @@ const Header = (props: Props) => {
                 Home
               </Link>
               <Link href={"/marketplace"} className="hover:text-slate-400">
+                Marketplace
+              </Link>
+              <Link href={"/courses"} className="hover:text-slate-400">
                 Courses
               </Link>
               <Link href={"/about-us"} className="hover:text-slate-400">

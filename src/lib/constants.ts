@@ -327,6 +327,13 @@ export const TeacherSidebarItems: SidebarItem[] = [
         minPlan: "free_trial",
         status: "beta",
       },
+      {
+        name: "Whiteboard",
+        url: "/design-studio/whiteboard",
+        icon: PenTool,
+        minPlan: "free_trial",
+        status: "beta",
+      },
     ],
   },
   {
