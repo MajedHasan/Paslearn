@@ -61,7 +61,10 @@ export default function CartPage() {
     setLoading(true);
     setError(null);
     try {
-      const r = await api.get("/cart");
+      const r = await api.get("/cart", {
+        // ⭐ Bypass browser + Next.js cache
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      });
       setCart(r.data.data);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load cart");
@@ -72,6 +75,13 @@ export default function CartPage() {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+
+  useEffect(() => {
+    const onCartCleared = () => load();
+    window.addEventListener("cart:cleared", onCartCleared);
+    return () => window.removeEventListener("cart:cleared", onCartCleared);
   }, [load]);
 
   const removeItem = async (itemId: string) => {

@@ -84,6 +84,13 @@ function StripePaymentForm({
         return;
       }
 
+      // ⭐ Force-sync — don't rely on the webhook
+      try {
+        await api.post(`/orders/${orderId}/verify`);
+      } catch (e: any) {
+        console.warn("Post-payment verify failed, order page will retry:", e?.message);
+      }
+
       // Success — webhook fires async, /orders/:id will poll
       router.push(`/orders/${orderId}`);
     } catch (err: any) {
@@ -166,6 +173,25 @@ export default function CheckoutPage() {
       toast.info("Payment was cancelled. Your cart is still here.");
     }
   }, [cancelled]);
+
+  useEffect(() => {
+    if (!cancelled) return;
+    // Clean up any dangling pending orders
+    (async () => {
+      try {
+        const r = await api.get("/orders");
+        const pending = (r.data.data || []).find((o: any) => o.status === "pending");
+        if (pending) {
+          await api.post(`/orders/${pending._id}/cancel`);
+          console.log("Cleaned up abandoned pending order");
+        }
+      } catch (e: any) {
+        console.warn("Could not clean up pending order:", e?.message);
+      }
+    })();
+    toast.info("Payment was cancelled. Your cart is still here.");
+  }, [cancelled]);
+
 
   const handlePlaceOrder = async () => {
     if (!preview) return;

@@ -74,17 +74,25 @@ export default function OrderConfirmationPage() {
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
         if (cancelled) return;
 
-        const updated = await fetchOrder();
-        if (!updated) return;
-        if (updated.status !== "pending") {
-          if (updated.status === "paid") {
-            try {
-              const er = await api.get("/enrollments/my");
-              setEnrollments(er.data.data || []);
-            } catch {}
+        // ⭐ Active verify — queries Stripe directly
+        try {
+          const vr = await api.post(`/orders/${id}/verify`);
+          if (vr.data.data) {
+            setOrder(vr.data.data);
+            if (vr.data.data.status === "paid") {
+              try {
+                const er = await api.get("/enrollments/my");
+                setEnrollments(er.data.data || []);
+              } catch {}
+              return;
+            }
+            if (vr.data.data.status !== "pending") return;
           }
-          return;
-        }
+        } catch {}
+
+        // Fallback to GET
+        const updated = await fetchOrder();
+        if (updated && updated.status !== "pending") return;
       }
       if (!cancelled) setPollTimedOut(true);
     };
@@ -94,6 +102,18 @@ export default function OrderConfirmationPage() {
       cancelled = true;
     };
   }, [order?._id, order?.status, pollTimedOut, fetchOrder]);
+
+
+  // Inside the paid branch, add a small effect
+  useEffect(() => {
+    if (order?.status === "paid") {
+      // Notify other tabs/pages that cart has changed
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("cart:cleared"));
+      }
+    }
+  }, [order?.status]);
+
 
   // ═══════════════ LOADING ═══════════════
   if (loading) {
@@ -171,12 +191,23 @@ export default function OrderConfirmationPage() {
         <div className="mt-8 flex flex-wrap justify-center gap-2">
           <Button
             className="rounded-xl bg-indigo-600 hover:bg-indigo-700"
-            onClick={() => {
-              setPollTimedOut(false);
-              setManualRefresh((x) => x + 1);
+            onClick={async () => {
+              try {
+                const r = await api.post(`/orders/${id}/verify`);
+                setOrder(r.data.data);
+                if (r.data.data?.status === "paid") {
+                  try {
+                    const er = await api.get("/enrollments/my");
+                    setEnrollments(er.data.data || []);
+                  } catch {}
+                }
+                setPollTimedOut(false);
+              } catch (e: any) {
+                toast.error(e?.response?.data?.message || "Still pending");
+              }
             }}
           >
-            <RefreshCw className="mr-2 h-4 w-4" /> Check again
+            <RefreshCw className="mr-2 h-4 w-4" /> Verify now
           </Button>
           <Link href="/student">
             <Button variant="outline" className="rounded-xl">
@@ -303,7 +334,7 @@ export default function OrderConfirmationPage() {
                     </div>
                   </div>
                   {l.slug && (
-                    <Link href={`/learn/${l.slug}`}>
+                    <Link href={`/student/courses/${l.slug}`}>
                       <Button
                         size="sm"
                         className="rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-md shadow-indigo-500/20"
