@@ -519,7 +519,7 @@ export default function CourseDetailPage() {
                       </div>
                       <Button
                         className="h-12 w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-sm font-semibold shadow-md shadow-emerald-500/25"
-                        onClick={() => router.push(`/learn/${slug}`)}
+                        onClick={() => router.push(`/student/learn/${slug}`)}
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
                         Continue learning

@@ -171,10 +171,23 @@ export default function VideoPlayer({
   useEffect(() => {
     if (isTouchDevice) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+
+      // ⭐ Skip if user is typing in an input / textarea / contenteditable
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
       if (showShortcuts) {
         if (e.key === "Escape") setShowShortcuts(false);
         return;
       }
+      
       switch (e.key.toLowerCase()) {
         case " ":
         case "k":

@@ -188,8 +188,8 @@ export const StudentSidebarItems: SidebarItem[] = [
         name: "Certificates",
         url: "/certificates",
         icon: Award,
-        status: "coming_soon",
-        minPlan: "pro",
+        status: "beta",
+        minPlan: "free",
       },
       {
         name: "Bookmarks",
@@ -222,6 +222,12 @@ export const StudentSidebarItems: SidebarItem[] = [
         status: "coming_soon",
       },
     ],
+  },
+  {
+    name: "Orders",
+    url: "/orders",
+    icon: CalendarDays,
+    status: "beta"
   },
   {
     name: "Affiliate",

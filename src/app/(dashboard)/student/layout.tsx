@@ -35,6 +35,7 @@ import {
   User,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const StudentLayout = ({ children }: { children: React.ReactNode }) => {
   const user = useAppSelector((state) => state.user.currentUser);
@@ -45,6 +46,15 @@ const StudentLayout = ({ children }: { children: React.ReactNode }) => {
   const handleLogout = () => {
     dispatch(logoutUser());
   };
+
+  const pathname = usePathname();
+  const isLearningMode = pathname?.startsWith("/student/learn");
+
+  // ⭐ Learning mode — no sidebar, no top bar, no distraction
+  if (isLearningMode) {
+    return <>{children}</>;
+  }
+
 
   return (
     <>

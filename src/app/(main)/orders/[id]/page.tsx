@@ -334,7 +334,7 @@ export default function OrderConfirmationPage() {
                     </div>
                   </div>
                   {l.slug && (
-                    <Link href={`/student/courses/${l.slug}`}>
+                    <Link href={`/student/learn/${l.slug}`}>
                       <Button
                         size="sm"
                         className="rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-md shadow-indigo-500/20"

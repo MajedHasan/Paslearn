@@ -1,171 +1,168 @@
 "use client";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import React, { useEffect, useState } from "react";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
-  LineChart,
+  CartesianGrid,
   Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
 } from "recharts";
+import { Activity, BarChart3, TrendingDown, TrendingUp } from "lucide-react";
+import { ChartSkeleton } from "./skeletons";
 
-type Props = {};
+export interface ActivityPoint {
+  month: string;
+  enrollments: number;
+  completions: number;
+}
 
-const ActivityChart = (props: Props) => {
-  const lineChartWeekData = [
-    { date: "10 Oct", value: 10, value2: 8, amt: 10 },
-    { date: "11 Oct", value: 14, value2: 15, amt: 20 },
-    { date: "12 Oct", value: 20, value2: 30, amt: 30 },
-    { date: "13 Oct", value: 40, value2: 45, amt: 40 },
-    { date: "14 Oct", value: 48, value2: 60, amt: 50 },
-    { date: "15 Oct", value: 55, value2: 25, amt: 60 },
-    { date: "16 Oct", value: 45, value2: 32, amt: 70 },
-  ];
-  const lineChartMonthData = [
-    { date: "01 Jan", value: 10, value2: 8, amt: 10 },
-    { date: "02 Jan", value: 14, value2: 15, amt: 20 },
-    { date: "03 Jan", value: 24, value2: 15, amt: 20 },
-    { date: "04 Jan", value: 34, value2: 15, amt: 20 },
-    { date: "05 Jan", value: 44, value2: 15, amt: 20 },
-    { date: "06 Jan", value: 54, value2: 15, amt: 20 },
-    { date: "07 Jan", value: 64, value2: 15, amt: 20 },
-    { date: "08 Jan", value: 74, value2: 15, amt: 20 },
-    { date: "09 Jan", value: 84, value2: 15, amt: 20 },
-    { date: "10 Jan", value: 94, value2: 15, amt: 20 },
-    { date: "11 Jan", value: 114, value2: 15, amt: 20 },
-    { date: "12 Jan", value: 124, value2: 15, amt: 20 },
-    { date: "13 Jan", value: 20, value2: 15, amt: 20 },
-    { date: "14 Jan", value: 35, value2: 15, amt: 20 },
-    { date: "15 Jan", value: 34, value2: 15, amt: 20 },
-    { date: "16 Jan", value: 55, value2: 15, amt: 20 },
-    { date: "17 Jan", value: 30, value2: 15, amt: 20 },
-    { date: "18 Jan", value: 20, value2: 15, amt: 20 },
-    { date: "19 Jan", value: 10, value2: 15, amt: 20 },
-    { date: "20 Jan", value: 50, value2: 15, amt: 20 },
-    { date: "21 Jan", value: 60, value2: 15, amt: 20 },
-    { date: "22 Jan", value: 80, value2: 15, amt: 20 },
-    { date: "23 Jan", value: 30, value2: 15, amt: 20 },
-    { date: "24 Jan", value: 40, value2: 15, amt: 20 },
-    { date: "25 Jan", value: 20, value2: 15, amt: 20 },
-    { date: "26 Jan", value: 75, value2: 15, amt: 20 },
-    { date: "27 Jan", value: 90, value2: 15, amt: 20 },
-    { date: "28 Jan", value: 100, value2: 15, amt: 20 },
-    { date: "29 Jan", value: 50, value2: 15, amt: 20 },
-    { date: "30 Jan", value: 10, value2: 15, amt: 20 },
-  ];
-  const lineChartYearData = [
-    { date: "Jan", value: 10, value2: 8, amt: 10 },
-    { date: "Feb", value: 14, value2: 15, amt: 20 },
-    { date: "Mar", value: 20, value2: 30, amt: 30 },
-    { date: "Apr", value: 40, value2: 45, amt: 40 },
-    { date: "May", value: 48, value2: 60, amt: 50 },
-    { date: "Jun", value: 55, value2: 25, amt: 60 },
-    { date: "Jul", value: 45, value2: 32, amt: 70 },
-    { date: "Aug", value: 45, value2: 32, amt: 70 },
-    { date: "Sep", value: 45, value2: 32, amt: 70 },
-    { date: "Oct", value: 45, value2: 32, amt: 70 },
-    { date: "Nov", value: 45, value2: 32, amt: 70 },
-    { date: "Dec", value: 45, value2: 32, amt: 70 },
-  ];
+export function ActivityChart({
+  data,
+  loading = false,
+}: {
+  data: ActivityPoint[];
+  loading?: boolean;
+}) {
+  const hasData = data.some((d) => d.enrollments > 0 || d.completions > 0);
 
-  const [isMounted, setIsMounted] = useState(true);
-  const [activityDate, setActivityDate] = useState("week");
+  // Compare last month to previous
+  const lastTwo = data.slice(-2);
+  const current = lastTwo[1]?.enrollments || 0;
+  const previous = lastTwo[0]?.enrollments || 0;
+  const trendPct = previous > 0 ? Math.round(((current - previous) / previous) * 100) : 0;
+  const isUp = trendPct >= 0;
 
-  useEffect(() => {
-    setIsMounted(false);
-  }, []);
-
-  useEffect(() => {
-    console.log(activityDate);
-  }, [activityDate]);
-
-  if (isMounted) return;
+  const totalEnrollments = data.reduce((a, d) => a + d.enrollments, 0);
+  const totalCompletions = data.reduce((a, d) => a + d.completions, 0);
 
   return (
-    <Card>
-      <CardHeader className="flex items-center gap-4 justify-between md:flex-row flex-col">
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-lg">Activities</CardTitle>
-          <div className="flex items-center gap-1">
-            <Badge className="p-0 w-2 h-2 rounded-full bg-themeAdminPrimary" />
-            <span className="text-xs">Theory</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Badge className="p-0 w-2 h-2 rounded-full bg-themeStudentPrimary" />
-            <span className="text-xs">Practice</span>
-          </div>
+    <Card className="overflow-hidden border-slate-200/80 shadow-sm">
+      <CardHeader className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-base font-black text-slate-900">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#0177FB] to-[#0156C7] shadow-sm">
+              <BarChart3 className="h-4 w-4 text-white" />
+            </span>
+            Learning Activity
+          </CardTitle>
+          <CardDescription className="mt-1 text-xs font-medium text-slate-500">
+            Your enrollments and completions over the last 6 months
+          </CardDescription>
         </div>
-        <Select onValueChange={(e) => setActivityDate(e)}>
-          <SelectTrigger className="max-w-[130px]">
-            <SelectValue placeholder="Week" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Select Date</SelectLabel>
-              <SelectItem value="week">Week</SelectItem>
-              <SelectItem value="month">Month</SelectItem>
-              <SelectItem value="year">Year</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </CardHeader>
-      <CardContent>
-        <div className="w-full h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={
-                activityDate === "week"
-                  ? lineChartWeekData
-                  : activityDate === "month"
-                  ? lineChartMonthData
-                  : lineChartYearData
-              }
-              width={500}
-              height={300}
-              margin={{
-                top: 5,
-                right: 30,
-                left: 20,
-                bottom: 5,
-              }}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
+            <div className="h-2 w-2 rounded-full bg-[#0177FB]" />
+            <span className="text-[11px] font-bold text-slate-700">
+              {totalEnrollments} enrolled
+            </span>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
+            <div className="h-2 w-2 rounded-full bg-[#FF7E02]" />
+            <span className="text-[11px] font-bold text-slate-700">
+              {totalCompletions} completed
+            </span>
+          </div>
+          {previous > 0 && (
+            <div
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold shadow-sm ${
+                isUp
+                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border border-rose-200 bg-rose-50 text-rose-700"
+              }`}
             >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="#0177FB"
-                activeDot={{ r: 8 }}
-                strokeWidth={4}
-              />
-              <Line
-                type="monotone"
-                dataKey="value2"
-                stroke="#FF7E02"
-                strokeWidth={4}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+              {isUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {isUp ? "+" : ""}{trendPct}% vs last month
+            </div>
+          )}
         </div>
+      </CardHeader>
+
+      <CardContent className="p-5">
+        {loading ? (
+          <ChartSkeleton height="h-72" />
+        ) : !hasData ? (
+          <EmptyActivity />
+        ) : (
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={data} margin={{ top: 15, right: 15, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="enrollGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#0177FB" stopOpacity={0.15} />
+                    <stop offset="100%" stopColor="#0177FB" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 4" stroke="#F1F5F9" vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 11, fill: "#94A3B8", fontWeight: 600 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#94A3B8", fontWeight: 600 }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: "1px solid #E2E8F0",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                  labelStyle={{ fontWeight: 800, color: "#1E293B", marginBottom: 4 }}
+                  cursor={{ stroke: "#CBD5E1", strokeWidth: 1, strokeDasharray: "4 4" }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="enrollments"
+                  name="Enrolled"
+                  stroke="#0177FB"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: "#0177FB", strokeWidth: 2, stroke: "#fff" }}
+                  activeDot={{ r: 7, fill: "#0177FB", strokeWidth: 3, stroke: "#fff" }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="completions"
+                  name="Completed"
+                  stroke="#FF7E02"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: "#FF7E02", strokeWidth: 2, stroke: "#fff" }}
+                  activeDot={{ r: 7, fill: "#FF7E02", strokeWidth: 3, stroke: "#fff" }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
-};
+}
 
-export default ActivityChart;
+function EmptyActivity() {
+  return (
+    <div className="flex h-72 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-white text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0177FB]/10 to-[#0177FB]/5">
+        <Activity className="h-7 w-7 text-[#0177FB]" />
+      </div>
+      <p className="mt-3 text-sm font-bold text-slate-900">Your activity chart starts here</p>
+      <p className="mt-1 max-w-xs text-xs text-slate-500">
+        Every enrollment and completion will be tracked as you learn.
+      </p>
+    </div>
+  );
+}
