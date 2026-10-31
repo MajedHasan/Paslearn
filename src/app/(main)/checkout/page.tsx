@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import { getStoredReferralCode, clearReferralCode } from "@/lib/affiliate-tracking";
+
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
@@ -200,7 +202,10 @@ export default function CheckoutPage() {
 
     try {
       // 1. Create order
-      const orderRes = await api.post("/orders");
+      const affiliateCode = getStoredReferralCode();
+      const orderRes = await api.post("/orders", {
+        affiliateCode: affiliateCode || undefined,
+      });
       const order = orderRes.data.data;
       setOrderId(order._id);
 
@@ -220,15 +225,18 @@ export default function CheckoutPage() {
 
       const payData = payRes.data.data;
 
+      // ⭐ Clear the referral code BEFORE any redirect
+      // (order already has it stored server-side, attribution is locked in)
+      if (affiliateCode) clearReferralCode();
+
       if (payData.clientSecret) {
-        // Stripe Elements flow
         setClientSecret(payData.clientSecret);
       } else if (payData.approvalUrl) {
-        // Redirect flow (PayPal or Stripe subscription)
         window.location.href = payData.approvalUrl;
       } else {
         throw new Error("Payment initiated but no redirect was provided");
       }
+
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || "Failed to place order";
       setPaymentError(msg);

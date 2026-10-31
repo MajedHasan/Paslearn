@@ -51,6 +51,8 @@ import {
   BookMarked,
   UserRound,
   Wallet,
+  Stars,
+  MessageSquare,
 } from "lucide-react";
 import { SidebarItem } from "./types";
 
@@ -190,6 +192,13 @@ export const StudentSidebarItems: SidebarItem[] = [
         icon: Award,
         status: "beta",
         minPlan: "free",
+      },
+      // ⭐ NEW
+      {
+        name: "My Reviews",
+        url: "/reviews",
+        icon: MessageSquare,
+        status: "beta",
       },
       {
         name: "Bookmarks",
