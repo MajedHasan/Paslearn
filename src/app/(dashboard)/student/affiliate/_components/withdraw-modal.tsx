@@ -27,8 +27,8 @@ import {
   Mail,
   Building2,
   User,
-  CreditCard,
   Globe,
+  CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -80,11 +80,9 @@ export function WithdrawModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // PayPal fields
   const [paypalEmail, setPaypalEmail] = useState("");
   const [accountHolderName, setAccountHolderName] = useState("");
 
-  // Bank fields
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [country, setCountry] = useState("");
@@ -95,7 +93,6 @@ export function WithdrawModal({
   const min = currentMethod.min;
   const canWithdraw = availableAmount >= min;
 
-  // Reset on open
   useEffect(() => {
     if (!open) return;
     setAmount(availableAmount.toFixed(2));
@@ -113,7 +110,6 @@ export function WithdrawModal({
       return setError(`Maximum available: $${availableAmount.toFixed(2)}`);
     if (n < min) return setError(`Minimum for ${currentMethod.label} is $${min}`);
 
-    // Validate method-specific fields
     const methodDetails: Record<string, any> = {};
     if (method === "paypal") {
       if (!paypalEmail.trim()) return setError("PayPal email is required");
@@ -176,9 +172,9 @@ export function WithdrawModal({
               ${availableAmount.toFixed(2)}
             </strong>
             {pendingAmount > 0 && (
-              <span className="block mt-1 text-[11px] text-slate-500">
-                ${pendingAmount.toFixed(2)} still in escrow (releases {holdDays}{" "}
-                days after each sale)
+              <span className="mt-1 block text-[11px] text-slate-500">
+                ${pendingAmount.toFixed(2)} still in escrow (releases{" "}
+                {holdDays} days after each sale)
               </span>
             )}
           </DialogDescription>
@@ -196,7 +192,6 @@ export function WithdrawModal({
             </div>
           )}
 
-          {/* Method */}
           <div>
             <label className="text-xs font-black uppercase tracking-wider text-slate-500">
               Withdrawal method
@@ -241,7 +236,6 @@ export function WithdrawModal({
             </p>
           </div>
 
-          {/* Amount */}
           <div>
             <label className="text-xs font-black uppercase tracking-wider text-slate-500">
               Amount (USD)
@@ -277,7 +271,6 @@ export function WithdrawModal({
             </div>
           </div>
 
-          {/* Method-specific fields */}
           {method === "paypal" ? (
             <>
               <div>
@@ -302,9 +295,6 @@ export function WithdrawModal({
                   placeholder="you@example.com"
                   className="mt-1.5 rounded-lg"
                 />
-                <p className="mt-1 text-[10px] text-slate-500">
-                  Payment will be sent to this email via PayPal
-                </p>
               </div>
             </>
           ) : (
@@ -361,7 +351,7 @@ export function WithdrawModal({
               </div>
               <div>
                 <label className="text-xs font-black uppercase tracking-wider text-slate-500">
-                  SWIFT / BIC code <span className="normal-case text-slate-400">(for international)</span>
+                  SWIFT / BIC (international)
                 </label>
                 <Input
                   value={swiftCode}
@@ -378,14 +368,13 @@ export function WithdrawModal({
                   value={additionalNote}
                   onChange={(e) => setAdditionalNote(e.target.value)}
                   rows={2}
-                  placeholder="Any special instructions for the admin"
+                  placeholder="Any special instructions"
                   className="mt-1.5 rounded-lg text-xs"
                 />
               </div>
             </>
           )}
 
-          {/* Preview */}
           {canWithdraw && parseFloat(amount) >= min && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
               <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
@@ -399,7 +388,6 @@ export function WithdrawModal({
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -407,7 +395,6 @@ export function WithdrawModal({
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
             <Button
               variant="outline"

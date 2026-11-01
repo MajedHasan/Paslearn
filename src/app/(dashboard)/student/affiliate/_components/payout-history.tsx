@@ -14,7 +14,6 @@ import {
   ChevronUp,
   Mail,
   Building2,
-  CreditCard,
   Globe,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -75,12 +74,12 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const METHOD_ICONS: Record<string, any> = {
-  stripe: CreditCard,
+  stripe: Wallet,
   paypal: Mail,
   manual: Building2,
 };
 
-export function PayoutHistory() {
+export function PayoutHistory({ refreshKey = 0 }: { refreshKey?: number }) {
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -93,7 +92,9 @@ export function PayoutHistory() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api.get("/affiliate/payouts", { params: { page, limit } });
+      const r = await api.get("/affiliate/payouts", {
+        params: { page, limit },
+      });
       setPayouts(r.data.data || []);
       setTotal(r.data.total || 0);
       setTotalPages(r.data.totalPages || 1);
@@ -106,7 +107,7 @@ export function PayoutHistory() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   if (total === 0 && !loading) return null;
 
@@ -155,10 +156,7 @@ export function PayoutHistory() {
                   const rowOpen = !!expandedRows[p._id];
                   const d = p.methodDetails || {};
                   const hasDetails =
-                    d.paypalEmail ||
-                    d.bankName ||
-                    d.accountNumber ||
-                    d.country;
+                    d.paypalEmail || d.bankName || d.accountNumber || d.country;
 
                   return (
                     <div
@@ -170,12 +168,10 @@ export function PayoutHistory() {
                         onClick={() => hasDetails && toggleRow(p._id)}
                         className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-slate-50/50"
                       >
-                        {/* Status icon */}
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100">
                           <StatusIcon className="h-4 w-4 text-slate-600" />
                         </div>
 
-                        {/* Main info */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <MethodIcon className="h-3 w-3 text-slate-400" />
@@ -201,7 +197,6 @@ export function PayoutHistory() {
                           )}
                         </div>
 
-                        {/* Amount + status */}
                         <div className="shrink-0 text-right">
                           <p className="text-sm font-black text-slate-900 tabular-nums">
                             ${p.amount.toFixed(2)}
@@ -224,7 +219,6 @@ export function PayoutHistory() {
                         )}
                       </button>
 
-                      {/* Expanded details */}
                       {rowOpen && hasDetails && (
                         <div className="border-t border-slate-100 bg-slate-50/50 p-3">
                           <p className="mb-2 text-[9px] font-black uppercase tracking-wider text-slate-400">

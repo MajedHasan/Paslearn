@@ -45,6 +45,8 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import VideoPlayer from "@/components/global/video/player/video-player";
 import { CourseCard, PublicCourse } from "@/components/public/course-card";
+import { useCartStatus } from "@/hooks/use-cart-status";
+
 
 const FAQ = [
   {
@@ -108,7 +110,7 @@ export default function CourseDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
-  const [inCart, setInCart] = useState(false);
+  const { inCart, setInCart } = useCartStatus(course?.productId);
 
   // Preview state — now supports all lesson types
   const [previewLesson, setPreviewLesson] = useState<{
@@ -155,29 +157,18 @@ export default function CourseDetailPage() {
     load();
   }, [load]);
 
-  // ═══════════════════ ENROLLMENT + CART STATE ═══════════════════
   useEffect(() => {
     if (!course?.productId) return;
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
     if (!token) return;
     (async () => {
       try {
         const r = await api.get("/entitlements/my");
-        const products = (r.data.data || []).map((e: any) =>
-          String(e.product?._id || e.product)
-        );
+        const products = (r.data.data || []).map((e: any) => String(e.product?._id || e.product));
         setIsEnrolled(products.includes(String(course.productId)));
       } catch {}
-      try {
-        const c = await api.get("/cart");
-        const items = c.data.data?.items || [];
-        setInCart(
-          items.some((i: any) => String(i.product) === String(course.productId))
-        );
-      } catch {}
     })();
-  }, [course]);
+  }, [course?.productId]);
 
   useEffect(() => {
     const onScroll = () => setShowMobileCta(window.scrollY > 600);
@@ -217,6 +208,7 @@ export default function CourseDetailPage() {
     try {
       await api.post("/cart/items", { productId: String(course.productId) });
       setInCart(true);
+      window.dispatchEvent(new CustomEvent("cart:updated"));   // ⭐ NEW
       if (course.priceModel === "free") {
         try {
           await api.post("/orders");

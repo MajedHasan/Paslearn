@@ -228,6 +228,7 @@ export default function CheckoutPage() {
       // ⭐ Clear the referral code BEFORE any redirect
       // (order already has it stored server-side, attribution is locked in)
       if (affiliateCode) clearReferralCode();
+      window.dispatchEvent(new CustomEvent("cart:updated"));   // ⭐ NEW
 
       if (payData.clientSecret) {
         setClientSecret(payData.clientSecret);

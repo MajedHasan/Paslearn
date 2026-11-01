@@ -483,6 +483,13 @@ export const TeacherSidebarItems: SidebarItem[] = [
     minPlan: "free_trial",
   },
   {
+    name: "Earnings",
+    url: "/earnings",
+    icon: Wallet,
+    minPlan: "free_trial",
+    status: "beta",
+  },
+  {
     name: "Billing & Payments",
     url: "/billing-payments",
     icon: Wallet,

@@ -77,6 +77,11 @@ export default function CartPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const onCartUpdate = () => load();
+    window.addEventListener("cart:updated", onCartUpdate);
+    return () => window.removeEventListener("cart:updated", onCartUpdate);
+  }, [load]);
 
   useEffect(() => {
     const onCartCleared = () => load();

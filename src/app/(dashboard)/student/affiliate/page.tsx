@@ -55,6 +55,9 @@ import api from "@/lib/api";
 import { WithdrawModal } from "./_components/withdraw-modal";
 import { PayoutHistory } from "./_components/payout-history";
 
+// ═══════════════════════════════════════════════════════
+// Types
+// ═══════════════════════════════════════════════════════
 interface AffiliateOverview {
   profile: {
     referralCode: string;
@@ -81,7 +84,17 @@ interface Referral {
   occurrenceNumber?: number;
   holdUntil?: string;
   createdAt: string;
-  order?: { _id: string; orderNumber: string; total: number };
+  order?: {
+    _id: string;
+    orderNumber: string;
+    total: number;
+    user?: {
+      _id: string;
+      name: string;
+      email: string;
+      profileImageUrl?: string;
+    };
+  };
   product?: { _id: string; title: string; type: string };
 }
 
@@ -142,12 +155,16 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
 
 const MIN_WITHDRAW = 50;
 
+// ═══════════════════════════════════════════════════════
+// Main page
+// ═══════════════════════════════════════════════════════
 export default function AffiliatePage() {
   const [overview, setOverview] = useState<AffiliateOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [payoutRefreshKey, setPayoutRefreshKey] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -215,15 +232,12 @@ export default function AffiliatePage() {
 
   const hasEarnings = chartData.some((d) => d.earnings > 0);
 
-  // ── Balance values ──
   const totalEarned = overview?.profile.totalEarned || 0;
   const totalPending = overview?.profile.totalPending || 0;
   const totalAvailable = overview?.profile.totalAvailable || 0;
   const totalPaid = overview?.profile.totalPaid || 0;
   const holdDays = overview?.profile.holdDays || 7;
-  const conversions = overview?.profile.conversions || 0;
 
-  // ⭐ Withdraw is based on AVAILABLE, not pending
   const canWithdraw = totalAvailable >= MIN_WITHDRAW;
   const remainingToWithdraw = Math.max(0, MIN_WITHDRAW - totalAvailable);
   const progressToMin = Math.min(100, (totalAvailable / MIN_WITHDRAW) * 100);
@@ -251,7 +265,7 @@ export default function AffiliatePage() {
 
   return (
     <div className="flex flex-col gap-5 py-4">
-      {/* ─── Header ─── */}
+      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest text-[#0177FB]">
@@ -275,7 +289,7 @@ export default function AffiliatePage() {
         </Button>
       </div>
 
-      {/* ─── Referral hero ─── */}
+      {/* Referral hero */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0177FB] via-[#0166d9] to-[#014bb0] p-6 text-white shadow-lg shadow-[#0177FB]/25">
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-[#FF7E02]/20 blur-3xl" />
@@ -336,7 +350,7 @@ export default function AffiliatePage() {
         </div>
       </div>
 
-      {/* ─── Stats ─── */}
+      {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatBox
           icon={Wallet}
@@ -372,7 +386,7 @@ export default function AffiliatePage() {
         />
       </div>
 
-      {/* ─── Withdraw card — always visible ─── */}
+      {/* Withdraw card */}
       <div
         className={`relative overflow-hidden rounded-2xl border p-5 ${
           canWithdraw
@@ -454,9 +468,8 @@ export default function AffiliatePage() {
         </div>
       </div>
 
-      {/* ─── Charts ─── */}
+      {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Earnings over time */}
         <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 p-4">
             <div className="flex items-center gap-2">
@@ -467,9 +480,7 @@ export default function AffiliatePage() {
                 <p className="text-sm font-black text-slate-900">
                   Earnings over time
                 </p>
-                <p className="text-[11px] text-slate-500">
-                  Monthly commission
-                </p>
+                <p className="text-[11px] text-slate-500">Monthly commission</p>
               </div>
             </div>
           </div>
@@ -549,7 +560,6 @@ export default function AffiliatePage() {
           </div>
         </div>
 
-        {/* By product type */}
         <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 p-4">
             <div className="flex items-center gap-2">
@@ -627,20 +637,23 @@ export default function AffiliatePage() {
         </div>
       </div>
 
-      {/* ─── Referrals list ─── */}
+      {/* Referrals list */}
       <ReferralsSection holdDays={holdDays} />
 
-      {/* ─── Withdrawal history ─── */}
-      <PayoutHistory />
+      {/* Withdrawal history */}
+      <PayoutHistory refreshKey={payoutRefreshKey} />
 
-      {/* ─── Modals ─── */}
+      {/* Modals */}
       <WithdrawModal
         open={withdrawOpen}
         onOpenChange={setWithdrawOpen}
         availableAmount={totalAvailable}
         pendingAmount={totalPending}
         holdDays={holdDays}
-        onSuccess={load}
+        onSuccess={() => {
+          setPayoutRefreshKey((k) => k + 1);
+          load();
+        }}
       />
 
       <HowItWorksModal
@@ -655,7 +668,6 @@ export default function AffiliatePage() {
 // ═══════════════════════════════════════════════════════
 // Sub-components
 // ═══════════════════════════════════════════════════════
-
 function StatBox({
   icon: Icon,
   label,
@@ -783,7 +795,21 @@ function ReferralsSection({ holdDays }: { holdDays: number }) {
               const statusMeta =
                 STATUS_META[ref.status] || STATUS_META.pending;
 
-              // Compute days until release for pending commissions
+              const buyer = ref.order?.user;
+              const buyerInitial = (buyer?.name || buyer?.email || "?")
+                .charAt(0)
+                .toUpperCase();
+              const buyerName = buyer?.name || "Customer";
+              const maskedEmail = buyer?.email
+                ? (() => {
+                    const [local, domain] = buyer.email.split("@");
+                    if (!domain) return buyer.email;
+                    return `${local.slice(0, 2)}${"*".repeat(
+                      Math.max(2, local.length - 2)
+                    )}@${domain}`;
+                  })()
+                : null;
+
               let releaseLabel: string | null = null;
               if (ref.status === "pending" && ref.holdUntil) {
                 const ms = new Date(ref.holdUntil).getTime() - Date.now();
@@ -797,40 +823,73 @@ function ReferralsSection({ holdDays }: { holdDays: number }) {
               return (
                 <div
                   key={ref._id}
-                  className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 transition-colors hover:border-slate-200"
+                  className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#0177FB]/40 hover:shadow-md"
                 >
                   <div
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${meta.gradient} shadow-sm`}
-                  >
-                    <Icon className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-1 text-xs font-bold text-slate-900">
-                      {ref.product?.title || "Product"}
-                    </p>
-                    <p className="text-[10px] text-slate-500">
-                      {meta.label}
-                      {ref.type === "recurring" &&
-                        ref.occurrenceNumber &&
-                        ` · recurring #${ref.occurrenceNumber}`}
-                      {" · "}
-                      {formatDistanceToNow(new Date(ref.createdAt))} ago
-                    </p>
-                    {releaseLabel && (
-                      <p className="mt-0.5 text-[10px] font-bold text-amber-600">
-                        {releaseLabel}
-                      </p>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-black text-slate-900 tabular-nums">
-                      ${ref.amount.toFixed(2)}
-                    </p>
-                    <span
-                      className={`inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ring-1 ring-inset ${statusMeta.className}`}
+                    className={`absolute left-0 top-0 bottom-0 w-1 ${
+                      ref.status === "pending"
+                        ? "bg-amber-400"
+                        : ref.status === "approved"
+                        ? "bg-blue-400"
+                        : ref.status === "paid"
+                        ? "bg-emerald-500"
+                        : "bg-slate-300"
+                    }`}
+                  />
+
+                  <div className="flex items-center gap-3 pl-2">
+                    <div
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${meta.gradient} shadow-md`}
                     >
-                      {statusMeta.label}
-                    </span>
+                      <Icon className="h-5 w-5 text-white" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-1 text-sm font-bold text-slate-900">
+                        {ref.product?.title || "Product"}
+                      </p>
+
+                      {buyer && (
+                        <div className="mt-1 flex items-center gap-2">
+                          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-[9px] font-black text-white shadow-sm">
+                            {buyerInitial}
+                          </div>
+                          <span className="truncate text-[11px] font-semibold text-slate-700">
+                            {buyerName}
+                          </span>
+                          {maskedEmail && (
+                            <span className="truncate text-[10px] text-slate-400">
+                              {maskedEmail}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <p className="mt-1 text-[10px] text-slate-500">
+                        {meta.label}
+                        {ref.type === "recurring" &&
+                          ref.occurrenceNumber &&
+                          ` · Recurring #${ref.occurrenceNumber}`}
+                        {" · "}
+                        {formatDistanceToNow(new Date(ref.createdAt))} ago
+                      </p>
+                      {releaseLabel && (
+                        <p className="mt-0.5 text-[10px] font-bold text-amber-600">
+                          {releaseLabel}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <p className="text-lg font-black text-emerald-600 tabular-nums">
+                        +${ref.amount.toFixed(2)}
+                      </p>
+                      <span
+                        className={`inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ring-1 ring-inset ${statusMeta.className}`}
+                      >
+                        {statusMeta.label}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );
@@ -920,9 +979,9 @@ function HowItWorksModal({
                 {holdDays}-day hold period
               </p>
               <p className="mt-0.5 text-xs">
-                Your commission sits in <strong>escrow for {holdDays} days</strong>{" "}
-                {`to protect against refunds and chargebacks. It's not
-                withdrawable yet, but it's already counted as earned.`}
+                Your commission sits in{" "}
+                <strong>escrow for {holdDays} days</strong> to protect against
+                refunds and chargebacks.
               </p>
             </div>
           </div>
@@ -946,9 +1005,8 @@ function HowItWorksModal({
             <div>
               <p className="font-bold text-slate-900">Get paid</p>
               <p className="mt-0.5 text-xs">
-                {`Admin reviews your request and sends payment within 1-2
-                business days. You'll see it appear as "Paid" in your
-                withdrawal history.`}
+                Admin reviews your request and sends payment within 1-2
+                business days.
               </p>
             </div>
           </div>
