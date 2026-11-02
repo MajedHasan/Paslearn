@@ -2,7 +2,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api", // match backend
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api",
   withCredentials: true,
 });
 
@@ -10,6 +10,11 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // ⭐ Country header (set via localStorage — see testing notes below)
+  const country = localStorage.getItem("x-country");
+  if (country && /^[A-Z]{2}$/i.test(country) && config.headers) {
+    config.headers["x-country"] = country.toUpperCase();
   }
   return config;
 });
@@ -25,9 +30,7 @@ api.interceptors.response.use(
         if (!refreshToken) throw new Error("Missing refresh token");
         const { data } = await axios.post(
           `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
-          {
-            refreshToken,
-          },
+          { refreshToken }
         );
         localStorage.setItem("accessToken", data.accessToken);
         localStorage.setItem("refreshToken", data.refreshToken);
@@ -42,7 +45,7 @@ api.interceptors.response.use(
       }
     }
     return Promise.reject(error);
-  },
+  }
 );
 
 export default api;

@@ -193,6 +193,7 @@ export default function CourseDetailPage() {
   };
 
   // ═══════════════════ PURCHASE ═══════════════════
+  // ═══════════════════ PURCHASE ═══════════════════
   const handlePrimaryAction = async () => {
     const token =
       typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
@@ -204,25 +205,53 @@ export default function CourseDetailPage() {
       toast.error("This course is not available for purchase");
       return;
     }
+
     setAddingToCart(true);
     try {
+      // 1. Always add to cart first (backend flow requires it)
       await api.post("/cart/items", { productId: String(course.productId) });
       setInCart(true);
-      window.dispatchEvent(new CustomEvent("cart:updated"));   // ⭐ NEW
+      window.dispatchEvent(new CustomEvent("cart:updated"));
+
+      // 2. Free course — attempt immediate enrollment
       if (course.priceModel === "free") {
         try {
-          await api.post("/orders");
-          setIsEnrolled(true);
-          toast.success("Enrolled! Enjoy the course 🎉", { duration: 5000 });
-        } catch {
-          toast.success("Added to cart — complete checkout to enroll");
+          const orderRes = await api.post("/orders");
+          const order = orderRes.data.data;
+
+          if (order?.status === "paid") {
+            // ✅ Enrolled directly — no cart, no checkout, no payment
+            setIsEnrolled(true);
+            toast.success("Enrolled! Opening your course…", {
+              description: course.title,
+              duration: 3000,
+            });
+            // Small delay so the toast is visible before navigation
+            setTimeout(() => router.push(`/student/learn/${slug}`), 700);
+            return;
+          }
+
+          // Cart had other items → order is pending → complete checkout together
+          toast.info("Free course added — complete checkout to enroll everything", {
+            action: { label: "Go to checkout", onClick: () => router.push("/checkout") },
+            duration: 6000,
+          });
+          return;
+        } catch (err: any) {
+          // Rare fallback — checkout page will handle it cleanly
+          const msg = err?.response?.data?.message || "Couldn't auto-enroll";
+          toast.info(`${msg} — finishing in your cart`, {
+            action: { label: "View cart", onClick: () => router.push("/cart") },
+          });
+          return;
         }
-      } else {
-        toast.success("Added to your cart", {
-          action: { label: "View cart →", onClick: () => router.push("/cart") },
-          duration: 6000,
-        });
       }
+
+      // 3. Paid course — standard cart flow
+      toast.success("Added to your cart", {
+        action: { label: "View cart →", onClick: () => router.push("/cart") },
+        duration: 6000,
+      });
     } catch (e: any) {
       toast.error(e?.response?.data?.message || "Failed to add to cart");
     } finally {
