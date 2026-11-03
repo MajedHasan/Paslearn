@@ -1,389 +1,1071 @@
-'use client'
+// app/(dashboard)/page.tsx
+"use client";
 
-export default function Page() {
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
+import { Button } from "@/components/ui/button";
+import {
+  Users, BookOpen, DollarSign, Star, Wallet, TrendingUp, Ticket,
+  ArrowRight, Plus, Sparkles, Clock, AlertCircle, CheckCircle2,
+  GraduationCap, MessageSquare, ChevronRight, Loader2, PartyPopper,
+  FileText, Video, Package, Zap,
+} from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import api from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+// ═══════════════════════════════════════════════════════════════
+// Types
+// ═══════════════════════════════════════════════════════════════
+
+interface TeacherProfile {
+  user?: { _id: string; name: string; email: string; profileImageUrl?: string };
+  photo?: string;
+  status: "pending_payment" | "active" | "inactive" | "rejected";
+  domain?: string;
+  selectedPlan?: { name?: string };
+}
+
+interface CourseStats {
+  totalCourses: number;
+  publishedCourses: number;
+  totalStudents: number;
+  totalRevenue: number;
+  avgRating: number;
+}
+
+interface EarningsSummary {
+  grossRevenue: number;
+  totalCoupons: number;
+  totalPaid: number;
+  totalPlatformFees: number;
+  totalAffiliateCommissions: number;
+  netEarnings: number;
+  totalTransactions: number;
+}
+
+interface Transaction {
+  orderId: string;
+  orderNumber: string;
+  paidAt: string;
+  productType: string;
+  productTitle: string;
+  productSlug: string;
+  thumbnailUrl: string | null;
+  netEarning: number;
+  buyerName: string;
+  buyerEmail: string;
+}
+
+interface PayoutBalance {
+  netEarned: number;
+  alreadyAllocated: number;
+  available: number;
+}
+
+interface Payout {
+  _id: string;
+  amount: number;
+  status: "requested" | "approved" | "paid" | "rejected";
+  method: string;
+  createdAt: string;
+}
+
+interface CouponStats {
+  totalRedemptions: number;
+  totalDiscountGiven: number;
+  uniqueUsers: number;
+  byStatus: { reserved: number; committed: number; reversed: number };
+  topCoupons: Array<{ code: string; redemptions: number; discountGiven: number }>;
+}
+
+interface PerProduct {
+  productId: string;
+  productType: string;
+  title: string;
+  slug: string;
+  thumbnailUrl: string | null;
+  ratingAvg: number;
+  enrollmentCount: number;
+  netEarnings: number;
+  sales: number;
+}
+
+interface Review {
+  _id: string;
+  teacherReply?: { text: string };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════
+
+function money(n: number, currency = "USD"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: n >= 1000 ? 0 : 2,
+  }).format(n || 0);
+}
+
+function compact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Stat card — mockup style, one accent color per metric
+// ═══════════════════════════════════════════════════════════════
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  bg,
+  fg,
+  href,
+  loading,
+}: {
+  icon: any;
+  label: string;
+  value: string;
+  hint?: string;
+  bg: string;
+  fg: string;
+  href?: string;
+  loading?: boolean;
+}) {
+  const inner = (
+    <div className="group flex items-start gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg">
+      <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", bg)}>
+        <Icon className={cn("h-6 w-6", fg)} />
+      </div>
+      <div className="min-w-0 flex-1">
+        {loading ? (
+          <div className="h-7 w-20 animate-pulse rounded bg-slate-100" />
+        ) : (
+          <p className="text-2xl font-black tabular-nums tracking-tight text-slate-900">
+            {value}
+          </p>
+        )}
+        <p className="mt-0.5 text-xs font-bold text-slate-500">{label}</p>
+        {hint && <p className="mt-0.5 text-[10px] text-slate-400">{hint}</p>}
+      </div>
+      {href && (
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" />
+      )}
+    </div>
+  );
+  return href ? <Link href={href}>{inner}</Link> : inner;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Custom tooltips for Recharts
+// ═══════════════════════════════════════════════════════════════
+
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
   return (
-    <main className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* TOP STATS GRID - 4 cards */}
-        <section className="grid grid-cols-4 gap-4">
-          {/* Card 1: Enrolled Courses */}
-          <div className="bg-white rounded-2xl p-6 flex items-start gap-4 shadow-sm hover:shadow-md transition">
-            <div className="bg-orange-100 rounded-xl p-3 flex-shrink-0">
-              <svg className="w-6 h-6 text-orange-500" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">957</p>
-              <p className="text-xs text-gray-500">Enrolled Courses</p>
-            </div>
-          </div>
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="text-sm font-black text-slate-900">
+        {typeof item.value === "number" ? money(item.value) : item.value}
+      </p>
+    </div>
+  );
+}
 
-          {/* Card 2: Active Courses */}
-          <div className="bg-white rounded-2xl p-6 flex items-start gap-4 shadow-sm hover:shadow-md transition">
-            <div className="bg-blue-100 rounded-xl p-3 flex-shrink-0">
-              <svg className="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M9 16.2L4.8 12m-1 0a6 6 0 018.5-8.5M9 12l5.5-5.5m1 0a6 6 0 01-8.5 8.5" stroke="currentColor" strokeWidth="2" fill="none"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">19</p>
-              <p className="text-xs text-gray-500">Active Courses</p>
-            </div>
-          </div>
+function PieTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0];
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-lg">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        {p.name}
+      </p>
+      <p className="text-sm font-black text-slate-900">
+        {p.value} sale{p.value === 1 ? "" : "s"} · {money(p.payload.revenue)}
+      </p>
+    </div>
+  );
+}
 
-          {/* Card 3: Course Instructors */}
-          <div className="bg-white rounded-2xl p-6 flex items-start gap-4 shadow-sm hover:shadow-md transition">
-            <div className="bg-amber-100 rounded-xl p-3 flex-shrink-0">
-              <svg className="w-6 h-6 text-amber-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-3.314 0-6 1.343-6 3v2h12v-2c0-1.657-2.686-3-6-3z"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">241</p>
-              <p className="text-xs text-gray-500">Course Instructors</p>
-            </div>
-          </div>
+// ═══════════════════════════════════════════════════════════════
+// Product type icon helper
+// ═══════════════════════════════════════════════════════════════
 
-          {/* Card 4: Completed Courses */}
-          <div className="bg-white rounded-2xl p-6 flex items-start gap-4 shadow-sm hover:shadow-md transition">
-            <div className="bg-green-100 rounded-xl p-3 flex-shrink-0">
-              <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">951</p>
-              <p className="text-xs text-gray-500">Completed Courses</p>
-            </div>
-          </div>
-        </section>
+function typeIcon(type: string) {
+  if (type === "course") return GraduationCap;
+  if (type === "digital_file") return FileText;
+  if (type === "coaching") return Video;
+  return Package;
+}
 
-        {/* SECOND STATS ROW - 4 cards */}
-        <section className="grid grid-cols-4 gap-4">
-          {/* Card 1: Students */}
-          <div className="bg-white rounded-2xl p-6 flex items-start gap-4 shadow-sm hover:shadow-md transition">
-            <div className="bg-red-100 rounded-xl p-3 flex-shrink-0">
-              <svg className="w-6 h-6 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="8" r="4" fill="currentColor"/>
-                <path d="M4 14c0-2.21 3.58-4 8-4s8 1.79 8 4v4H4v-4z" fill="currentColor"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">1,674,767</p>
-              <p className="text-xs text-gray-500">Students</p>
-            </div>
-          </div>
+// ═══════════════════════════════════════════════════════════════
+// Page
+// ═══════════════════════════════════════════════════════════════
 
-          {/* Card 2: Online Courses */}
-          <div className="bg-white rounded-2xl p-6 flex items-start gap-4 shadow-sm hover:shadow-md transition">
-            <div className="bg-lime-100 rounded-xl p-3 flex-shrink-0">
-              <svg className="w-6 h-6 text-lime-600" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">3</p>
-              <p className="text-xs text-gray-500">Online Courses</p>
-            </div>
-          </div>
+export default function TeacherDashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-          {/* Card 3: USD Total Earning */}
-          <div className="bg-white rounded-2xl p-6 flex items-start gap-4 shadow-sm hover:shadow-md transition">
-            <div className="bg-slate-100 rounded-xl p-3 flex-shrink-0">
-              <svg className="w-6 h-6 text-slate-600" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="2" y="7" width="20" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M2 11h20" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">$7,461,767</p>
-              <p className="text-xs text-gray-500">USD Total Earning</p>
-            </div>
-          </div>
+  const [profile, setProfile] = useState<TeacherProfile | null>(null);
+  const [stats, setStats] = useState<CourseStats | null>(null);
+  const [summary, setSummary] = useState<EarningsSummary | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [balance, setBalance] = useState<PayoutBalance | null>(null);
+  const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [couponStats, setCouponStats] = useState<CouponStats | null>(null);
+  const [products, setProducts] = useState<PerProduct[]>([]);
+  const [pendingReviews, setPendingReviews] = useState(0);
 
-          {/* Card 4: Course Sold */}
-          <div className="bg-white rounded-2xl p-6 flex items-start gap-4 shadow-sm hover:shadow-md transition">
-            <div className="bg-purple-100 rounded-xl p-3 flex-shrink-0">
-              <svg className="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">56,489</p>
-              <p className="text-xs text-gray-500">Course Sold</p>
-            </div>
-          </div>
-        </section>
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [
+        profileRes,
+        statsRes,
+        earningsRes,
+        balanceRes,
+        payoutsRes,
+        couponRes,
+        perProductRes,
+        reviewsRes,
+      ] = await Promise.allSettled([
+        api.get("/teacher-profile"),
+        api.get("/teacher/courses/stats"),
+        api.get("/teacher/earnings/transactions", { params: { limit: 100 } }),
+        api.get("/teacher/payouts/balance"),
+        api.get("/teacher/payouts", { params: { limit: 50 } }),
+        api.get("/coupons/redemptions/stats"),
+        api.get("/teacher/earnings/per-product"),
+        api.get("/teacher/reviews", { params: { limit: 100 } }),
+      ]);
 
-        {/* PROFILE SECTION */}
-        <section className="bg-gray-400 rounded-2xl p-6 flex items-center justify-between">
-          {/* Left side - Profile */}
+      if (profileRes.status === "fulfilled") setProfile(profileRes.value.data.data);
+      if (statsRes.status === "fulfilled") setStats(statsRes.value.data.data);
+      if (earningsRes.status === "fulfilled") {
+        setSummary(earningsRes.value.data.summary);
+        setTransactions(earningsRes.value.data.data || []);
+      }
+      if (balanceRes.status === "fulfilled") setBalance(balanceRes.value.data.data);
+      if (payoutsRes.status === "fulfilled") {
+        setPayouts(payoutsRes.value.data.data || []);
+      }
+      if (couponRes.status === "fulfilled") setCouponStats(couponRes.value.data.data);
+      if (perProductRes.status === "fulfilled") setProducts(perProductRes.value.data.data || []);
+      if (reviewsRes.status === "fulfilled") {
+        const items: Review[] = reviewsRes.value.data.data || [];
+        setPendingReviews(items.filter((r) => !r.teacherReply).length);
+      }
+
+      if (statsRes.status === "rejected" && earningsRes.status === "rejected") {
+        setError("Couldn't load your dashboard. Please try again.");
+      }
+    } catch (e: any) {
+      setError(e?.message || "Failed to load dashboard");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // ── Derived ────────────────────────────────────────────
+  const fullName = profile?.user?.name || "Teacher";
+  const teacherName = fullName.split(" ")[0];
+  const email = profile?.user?.email || "";
+  const avatarUrl = profile?.photo || profile?.user?.profileImageUrl || "";
+  const initial = (fullName || "T").charAt(0).toUpperCase();
+
+  const pendingPayoutAmount = useMemo(
+    () =>
+      payouts
+        .filter((p) => p.status === "requested" || p.status === "approved")
+        .reduce((a, p) => a + (p.amount || 0), 0),
+    [payouts]
+  );
+
+  const topProducts = useMemo(
+    () => [...products].sort((a, b) => b.netEarnings - a.netEarnings).slice(0, 5),
+    [products]
+  );
+
+  const topCoupons = useMemo(
+    () => (couponStats?.topCoupons || []).slice(0, 3),
+    [couponStats]
+  );
+
+  const recentTransactions = useMemo(() => transactions.slice(0, 6), [transactions]);
+
+  // ── Chart data: revenue over last 30 days ──────────────
+  const revenueSeries = useMemo(() => {
+    const byDay = new Map<string, number>();
+    const now = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      byDay.set(d.toISOString().slice(0, 10), 0);
+    }
+    transactions.forEach((t) => {
+      if (!t.paidAt) return;
+      const key = new Date(t.paidAt).toISOString().slice(0, 10);
+      if (byDay.has(key)) byDay.set(key, (byDay.get(key) || 0) + (t.netEarning || 0));
+    });
+    return Array.from(byDay.entries()).map(([date, value]) => ({
+      date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      value: Math.round(value * 100) / 100,
+    }));
+  }, [transactions]);
+
+  const revenueTotal = useMemo(
+    () => revenueSeries.reduce((a, s) => a + s.value, 0),
+    [revenueSeries]
+  );
+
+  // ── Chart data: product mix donut ──────────────────────
+  const productMix = useMemo(() => {
+    const map = new Map<string, { sales: number; revenue: number }>();
+    transactions.forEach((t) => {
+      const cur = map.get(t.productType) || { sales: 0, revenue: 0 };
+      cur.sales += 1;
+      cur.revenue += t.netEarning || 0;
+      map.set(t.productType, cur);
+    });
+    const LABELS: Record<string, string> = {
+      course: "Courses",
+      digital_file: "Digital files",
+      coaching: "Coaching",
+      platform_subscription: "Subscriptions",
+      addon: "Addons",
+    };
+    const COLORS: Record<string, string> = {
+      course: "#EAB308",
+      digital_file: "#F97316",
+      coaching: "#8B5CF6",
+      platform_subscription: "#3B82F6",
+      addon: "#64748B",
+    };
+    return Array.from(map.entries())
+      .map(([type, d]) => ({
+        name: LABELS[type] || type,
+        value: d.sales,
+        revenue: Math.round(d.revenue * 100) / 100,
+        color: COLORS[type] || "#94A3B8",
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [transactions]);
+
+  const attentionItems = useMemo(() => {
+    const items: Array<{ label: string; href: string; icon: any; tone: string }> = [];
+    if (pendingReviews > 0) {
+      items.push({
+        label: `${pendingReviews} review${pendingReviews === 1 ? "" : "s"} awaiting reply`,
+        href: "/teacher/reviews",
+        icon: MessageSquare,
+        tone: "amber",
+      });
+    }
+    if (pendingPayoutAmount > 0) {
+      items.push({
+        label: `Pending payout: ${money(pendingPayoutAmount)}`,
+        href: "/teacher/billing-payments",
+        icon: Wallet,
+        tone: "blue",
+      });
+    }
+    if (balance && balance.available >= 50 && pendingPayoutAmount === 0) {
+      items.push({
+        label: `${money(balance.available)} ready to withdraw`,
+        href: "/teacher/billing-payments",
+        icon: DollarSign,
+        tone: "emerald",
+      });
+    }
+    return items;
+  }, [pendingReviews, pendingPayoutAmount, balance]);
+
+  const isNewTeacher =
+    !loading &&
+    stats &&
+    stats.totalCourses === 0 &&
+    (summary?.totalTransactions || 0) === 0;
+
+  // ═══════════════════════════════════════════════════════
+  // Loading
+  // ═══════════════════════════════════════════════════════
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-5 py-4">
+        <div className="h-32 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+          ))}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="h-80 animate-pulse rounded-2xl bg-slate-100" />
+          <div className="h-80 animate-pulse rounded-2xl bg-slate-100" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center py-20 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-100">
+          <AlertCircle className="h-7 w-7 text-rose-600" />
+        </div>
+        <p className="mt-4 text-sm font-bold text-rose-900">{error}</p>
+        <Button
+          className="mt-4 rounded-lg bg-yellow-400 font-bold text-gray-900 hover:bg-yellow-500"
+          onClick={load}
+        >
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5 py-4">
+      {/* ═══════════════════════════════════════════ */}
+      {/* HERO — amber gradient                       */}
+      {/* ═══════════════════════════════════════════ */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-400 to-orange-400 p-6 shadow-lg sm:p-8">
+        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/20 blur-3xl" />
+        <div className="absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-orange-500/20 blur-3xl" />
+
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full flex-shrink-0 overflow-hidden border-2 border-white">
-              <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=64&h=64&fit=crop" alt="Anas" className="w-full h-full object-cover" />
-            </div>
-            <div className="text-white">
-              <p className="font-bold text-sm">Anas Moudnib</p>
-              <p className="text-xs opacity-90">Anas.Moudnib@gmail.com</p>
-            </div>
-          </div>
-
-          {/* Middle - Progress */}
-          <div className="flex items-center gap-3 flex-1 mx-8">
-            <span className="text-white text-xs font-medium whitespace-nowrap">1/4 Steps</span>
-            <div className="flex-1 bg-gray-300 rounded-full h-2 overflow-hidden">
-              <div className="bg-yellow-400 h-full w-1/4"></div>
-            </div>
-            <span className="text-white text-xs font-medium whitespace-nowrap">25% Completed</span>
-          </div>
-
-          {/* Right side - Buttons */}
-          <div className="flex items-center gap-2">
-            <button className="bg-yellow-400 text-gray-900 font-semibold px-5 py-2 rounded-lg hover:bg-yellow-500 transition text-sm">
-              Edit Biography
-            </button>
-            <button className="text-white hover:opacity-75 transition p-1">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
-              </svg>
-            </button>
-          </div>
-        </section>
-
-        {/* MAIN CONTENT GRID - Recent Courses, Create, Scheduled */}
-        <section className="grid grid-cols-3 gap-6">
-          {/* LEFT: Recent Courses Results with Pie Chart */}
-          <div className="col-span-2 bg-white rounded-2xl p-6 border-l-4 border-yellow-400 shadow-sm">
-            <h3 className="font-bold text-base mb-6 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-gray-900 rounded-full"></span>
-              Recent Courses results
-            </h3>
-
-            <div className="grid grid-cols-2 gap-8">
-              {/* Pie Chart */}
-              <div className="flex items-center justify-center h-56">
-                <svg viewBox="0 0 100 100" className="w-40 h-40">
-                  {/* Orange segment */}
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#F97316" strokeWidth="14" strokeDasharray="55.3 251.3" transform="rotate(-90 50 50)" />
-                  {/* Green segment */}
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#10B981" strokeWidth="14" strokeDasharray="32.9 251.3" strokeDashoffset="-55.3" transform="rotate(-90 50 50)" />
-                  {/* Pink segment */}
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#EC4899" strokeWidth="14" strokeDasharray="18.7 251.3" strokeDashoffset="-88.2" transform="rotate(-90 50 50)" />
-                  {/* Cyan segment */}
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#06B6D4" strokeWidth="14" strokeDasharray="25.1 251.3" strokeDashoffset="-106.9" transform="rotate(-90 50 50)" />
-                  {/* Yellow segment */}
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#FCD34D" strokeWidth="14" strokeDasharray="3.8 251.3" strokeDashoffset="-132" transform="rotate(-90 50 50)" />
-                  {/* Gray segment */}
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#D1D5DB" strokeWidth="14" strokeDasharray="115.9 251.3" strokeDashoffset="-135.8" transform="rotate(-90 50 50)" />
-                </svg>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={fullName}
+                className="h-16 w-16 rounded-2xl border-2 border-white/40 object-cover shadow-lg"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/30 text-2xl font-black text-gray-900 shadow-lg backdrop-blur">
+                {initial}
               </div>
+            )}
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-900/70">
+                Welcome back
+              </p>
+              <h1 className="mt-0.5 text-2xl font-black tracking-tight text-gray-900 sm:text-3xl">
+                Hi, {teacherName} 👋
+              </h1>
+              {email && <p className="mt-0.5 text-xs text-gray-900/70">{email}</p>}
+              {profile?.status === "pending_payment" && (
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-800 shadow-sm">
+                  <AlertCircle className="h-2.5 w-2.5" /> Plan payment pending
+                </span>
+              )}
+              {profile?.status === "active" && profile?.selectedPlan && (
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-gray-900/90 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+                  <Sparkles className="h-2.5 w-2.5 text-yellow-400" />
+                  {profile.selectedPlan.name || "Active plan"}
+                </span>
+              )}
+            </div>
+          </div>
 
-              {/* Legend and Stats */}
-              <div className="space-y-3">
-                {[
-                  { color: 'bg-orange-500', text: '220 students', desc: '19% Students passing with A grade' },
-                  { color: 'bg-teal-600', text: '130 students', desc: '19% Students passing with B grade' },
-                  { color: 'bg-pink-400', text: '70 students', desc: '19% Students passing with C grade' },
-                  { color: 'bg-cyan-500', text: '89 students', desc: '19% Students passing with D grade' },
-                  { color: 'bg-yellow-300', text: '12 students', desc: '19% Students failing the test' },
-                ].map((item, i) => (
-                  <div key={i}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className={`w-3 h-3 ${item.color} rounded-sm`}></div>
-                      <span className="text-sm text-gray-700">{item.text}</span>
-                    </div>
-                    <p className="text-xs text-gray-400 ml-5">{item.desc}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/teacher/courses/new">
+              <Button className="h-11 rounded-lg bg-gray-900 font-bold text-white shadow-md hover:bg-gray-800">
+                <Plus className="mr-1.5 h-4 w-4" />
+                New course
+              </Button>
+            </Link>
+            <Link href="/teacher/earnings">
+              <Button
+                variant="outline"
+                className="h-11 rounded-lg border-gray-900/20 bg-white/90 font-bold text-gray-900 hover:bg-white"
+              >
+                <DollarSign className="mr-1.5 h-4 w-4" />
+                Earnings
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════ */}
+      {/* NEW TEACHER EMPTY STATE                     */}
+      {/* ═══════════════════════════════════════════ */}
+      {isNewTeacher && (
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-yellow-400 to-amber-500 shadow-lg shadow-yellow-400/30">
+            <PartyPopper className="h-9 w-9 text-gray-900" />
+          </div>
+          <h2 className="mt-5 text-2xl font-black tracking-tight text-gray-900">
+            Let&apos;s build something great
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
+            Create your first course, digital file, or coaching offer and start
+            earning. It only takes a few minutes.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <Link href="/teacher/courses/new">
+              <Button className="h-11 rounded-lg bg-yellow-400 font-bold text-gray-900 shadow-md hover:bg-yellow-500">
+                <Plus className="mr-2 h-4 w-4" /> Create a course
+              </Button>
+            </Link>
+            <Link href="/teacher/digital-files">
+              <Button variant="outline" className="h-11 rounded-lg">
+                <FileText className="mr-2 h-4 w-4" /> Upload a digital file
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {!isNewTeacher && (
+        <>
+          {/* ═══════════════════════════════════════════ */}
+          {/* PRIMARY STATS                               */}
+          {/* ═══════════════════════════════════════════ */}
+          <div>
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-amber-600">
+              Your academy
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                icon={Users}
+                label="Total students"
+                value={compact(stats?.totalStudents || 0)}
+                hint="All-time enrollments"
+                bg="bg-red-100"
+                fg="text-red-500"
+                href="/teacher/student"
+              />
+              <StatCard
+                icon={BookOpen}
+                label="Published courses"
+                value={String(stats?.publishedCourses || 0)}
+                hint={`${stats?.totalCourses || 0} total`}
+                bg="bg-blue-100"
+                fg="text-blue-500"
+                href="/teacher/courses"
+              />
+              <StatCard
+                icon={Star}
+                label="Avg. rating"
+                value={(stats?.avgRating || 0).toFixed(1)}
+                hint="Across all courses"
+                bg="bg-amber-100"
+                fg="text-amber-600"
+                href="/teacher/courses"
+              />
+              <StatCard
+                icon={TrendingUp}
+                label="Total revenue"
+                value={money(stats?.totalRevenue || 0)}
+                hint="Gross, before fees"
+                bg="bg-green-100"
+                fg="text-green-600"
+                href="/teacher/earnings"
+              />
+            </div>
+          </div>
+
+          {/* ═══════════════════════════════════════════ */}
+          {/* FINANCIAL STATS                             */}
+          {/* ═══════════════════════════════════════════ */}
+          <div>
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-amber-600">
+              Money
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                icon={DollarSign}
+                label="Lifetime earnings"
+                value={money(balance?.netEarned || 0)}
+                hint="After platform + affiliate"
+                bg="bg-slate-100"
+                fg="text-slate-600"
+                href="/teacher/earnings"
+              />
+              <StatCard
+                icon={Wallet}
+                label="Available to withdraw"
+                value={money(balance?.available || 0)}
+                hint={
+                  (balance?.available || 0) > 0
+                    ? "Ready to request a payout"
+                    : "Min $50 to withdraw"
+                }
+                bg="bg-emerald-100"
+                fg="text-emerald-600"
+                href="/teacher/billing-payments"
+              />
+              <StatCard
+                icon={Clock}
+                label="Pending payouts"
+                value={money(pendingPayoutAmount)}
+                hint={
+                  pendingPayoutAmount > 0
+                    ? "Awaiting admin approval"
+                    : "No pending requests"
+                }
+                bg="bg-orange-100"
+                fg="text-orange-500"
+                href="/teacher/billing-payments"
+              />
+              <StatCard
+                icon={Ticket}
+                label="Coupon discounts given"
+                value={money(couponStats?.totalDiscountGiven || 0)}
+                hint={`${couponStats?.totalRedemptions || 0} redemption${(couponStats?.totalRedemptions || 0) === 1 ? "" : "s"}`}
+                bg="bg-purple-100"
+                fg="text-purple-600"
+                href="/teacher/marketing/coupons-discounts"
+              />
+            </div>
+          </div>
+
+          {/* ═══════════════════════════════════════════ */}
+          {/* REVENUE CHART + TOP PRODUCTS                */}
+          {/* ═══════════════════════════════════════════ */}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+            {/* Revenue AreaChart */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-slate-700">
+                      <span className="h-2 w-2 rounded-full bg-amber-400" />
+                      Revenue · last 30 days
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Net earnings after fees &amp; commissions
+                    </p>
                   </div>
-                ))}
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      Total
+                    </p>
+                    <p className="text-lg font-black tabular-nums text-slate-900">
+                      {money(revenueTotal)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-2">
+                {revenueTotal === 0 ? (
+                  <div className="flex h-[240px] flex-col items-center justify-center text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100">
+                      <TrendingUp className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <p className="mt-3 text-sm font-bold text-slate-900">
+                      No revenue yet
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Your earnings will show up here after your first sale.
+                    </p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={240}>
+                    <AreaChart
+                      data={revenueSeries}
+                      margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#EAB308" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#EAB308" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="#E5E7EB"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 10, fill: "#94A3B8" }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "#94A3B8" }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
+                        width={48}
+                      />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#EAB308"
+                        strokeWidth={2.5}
+                        fill="url(#revGrad)"
+                        dot={false}
+                        activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
 
-            {/* Stats at bottom */}
-            <div className="border-t border-gray-200 mt-6 pt-6 flex gap-12">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">1381</p>
-                <p className="text-xs text-gray-500">Students attended the test</p>
+            {/* Top products */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 px-6 py-4">
+                <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-slate-700">
+                  <Sparkles className="h-4 w-4 text-orange-500" />
+                  Top products
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">By net earnings</p>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">92</p>
-                <p className="text-xs text-gray-500">Students didn&apos;t attend the test</p>
+              <div className="divide-y divide-slate-100">
+                {topProducts.length === 0 ? (
+                  <div className="px-6 py-10 text-center">
+                    <p className="text-sm text-slate-500">No sales yet.</p>
+                  </div>
+                ) : (
+                  topProducts.map((p, i) => {
+                    const Icon = typeIcon(p.productType);
+                    return (
+                      <Link
+                        key={p.productId}
+                        href={`/teacher/courses/${p.productId}`}
+                        className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-amber-50/40"
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[10px] font-black text-amber-700">
+                          {i + 1}
+                        </span>
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-amber-100 to-orange-100">
+                          {p.thumbnailUrl ? (
+                            <img
+                              src={p.thumbnailUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Icon className="h-4 w-4 text-amber-600" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-slate-900">
+                            {p.title}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {p.sales} sale{p.sales === 1 ? "" : "s"} ·{" "}
+                            {p.enrollmentCount} enrolled
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-sm font-black tabular-nums text-slate-900">
+                          {money(p.netEarnings)}
+                        </p>
+                      </Link>
+                    );
+                  })
+                )}
               </div>
             </div>
-
-            {/* Bottom border */}
-            <div className="border-b-4 border-yellow-400 mt-6 -mx-6 -mb-6"></div>
           </div>
 
-          {/* RIGHT: Create Section */}
-          <div className="space-y-6">
-            {/* Create Card */}
-            <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
-              <h3 className="font-bold text-base mb-4">Create</h3>
-              <div className="bg-yellow-100 rounded-xl p-8 mb-4 flex items-center justify-center h-24">
-                <svg className="w-12 h-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="9" strokeWidth="1.5" />
-                  <path d="M12 9v6M9 12h6" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
+          {/* ═══════════════════════════════════════════ */}
+          {/* PRODUCT MIX DONUT + RECENT SALES            */}
+          {/* ═══════════════════════════════════════════ */}
+          <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+            {/* PieChart — product mix */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 px-6 py-4">
+                <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-slate-700">
+                  <Package className="h-4 w-4 text-orange-500" />
+                  Sales by product type
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  What&apos;s actually selling
+                </p>
               </div>
-              <button className="w-full bg-yellow-400 text-gray-900 font-semibold py-2.5 rounded-full hover:bg-yellow-500 transition text-sm">
-                Create test
-              </button>
+              <div className="p-4">
+                {productMix.length === 0 ? (
+                  <div className="flex h-[240px] flex-col items-center justify-center text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-100">
+                      <Package className="h-6 w-6 text-orange-500" />
+                    </div>
+                    <p className="mt-3 text-sm font-bold text-slate-900">
+                      No sales data yet
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Make your first sale to see the breakdown.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={productMix}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={80}
+                          paddingAngle={2}
+                          stroke="none"
+                        >
+                          {productMix.map((entry, i) => (
+                            <Cell key={i} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<PieTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="mt-2 space-y-1.5">
+                      {productMix.map((row) => (
+                        <div
+                          key={row.name}
+                          className="flex items-center justify-between text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 rounded-sm"
+                              style={{ background: row.color }}
+                            />
+                            <span className="font-semibold text-slate-700">
+                              {row.name}
+                            </span>
+                          </div>
+                          <span className="font-bold tabular-nums text-slate-900">
+                            {row.value} · {money(row.revenue)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Scheduled Card */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm">
-              <h3 className="font-bold text-base mb-6 text-center">Scheduled</h3>
-              <div className="flex justify-center gap-3 mb-6">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-900">00</p>
-                  <p className="text-xs text-gray-500">hr</p>
-                </div>
-                <p className="text-2xl font-bold text-gray-900">:</p>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-900">42</p>
-                  <p className="text-xs text-gray-500">min</p>
-                </div>
-                <p className="text-2xl font-bold text-gray-900">:</p>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-gray-900">10</p>
-                  <p className="text-xs text-gray-500">sec</p>
+            {/* Recent sales */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-slate-700">
+                      <Zap className="h-4 w-4 text-amber-500" />
+                      Recent sales
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Latest transactions
+                    </p>
+                  </div>
+                  <Link
+                    href="/teacher/earnings"
+                    className="text-xs font-bold text-amber-600 hover:underline"
+                  >
+                    View all →
+                  </Link>
                 </div>
               </div>
-              <div className="text-center mb-6">
-                <p className="font-semibold text-sm text-gray-900">Geography</p>
-                <p className="text-xs text-gray-500">Created on: 12 May,24</p>
+              <div className="divide-y divide-slate-100">
+                {recentTransactions.length === 0 ? (
+                  <div className="px-6 py-10 text-center">
+                    <p className="text-sm text-slate-500">No transactions yet.</p>
+                  </div>
+                ) : (
+                  recentTransactions.map((t) => (
+                    <div
+                      key={t.orderId + t.productTitle}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 text-[11px] font-black text-gray-900">
+                        {(t.buyerName || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-slate-900">
+                          {t.buyerName || "Student"}
+                        </p>
+                        <p className="truncate text-[11px] text-slate-500">
+                          {t.productTitle || "Product"}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-black tabular-nums text-emerald-600">
+                          +{money(t.netEarning)}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {t.paidAt
+                            ? formatDistanceToNow(new Date(t.paidAt), {
+                                addSuffix: true,
+                              })
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
-              <button className="w-full bg-yellow-400 text-gray-900 font-semibold py-2.5 rounded-full hover:bg-yellow-500 transition text-sm">
-                Set another
-              </button>
             </div>
           </div>
-        </section>
 
-        {/* BOTTOM SECTION - Course Rating, Profile View, Revenue */}
-        <section className="grid grid-cols-3 gap-6">
-          {/* Overall Course Rating */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-base">Overall Course Rating</h3>
-              <div className="relative">
-                <select className="text-xs text-gray-600 border border-gray-200 rounded px-2 py-1 bg-white cursor-pointer appearance-none pr-6">
-                  <option>This week</option>
-                  <option>This month</option>
-                  <option>All time</option>
-                </select>
-                <svg className="absolute right-1.5 top-1.5 w-4 h-4 text-gray-600 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
-                </svg>
+          {/* ═══════════════════════════════════════════ */}
+          {/* NEEDS ATTENTION + COUPON PERFORMANCE        */}
+          {/* ═══════════════════════════════════════════ */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Needs attention */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 px-6 py-4">
+                <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-slate-700">
+                  <AlertCircle className="h-4 w-4 text-orange-500" />
+                  Needs attention
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Things waiting on you
+                </p>
+              </div>
+              <div className="p-4">
+                {attentionItems.length === 0 ? (
+                  <div className="flex flex-col items-center py-8 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50">
+                      <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                    </div>
+                    <p className="mt-3 text-sm font-bold text-slate-900">
+                      All caught up
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      No pending reviews or payouts.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {attentionItems.map((item, i) => {
+                      const Icon = item.icon;
+                      const tone =
+                        item.tone === "amber"
+                          ? "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300"
+                          : item.tone === "emerald"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300"
+                          : "border-blue-200 bg-blue-50 text-blue-800 hover:border-blue-300";
+                      return (
+                        <Link
+                          key={i}
+                          href={item.href}
+                          className={cn(
+                            "flex items-center gap-3 rounded-xl border p-3 transition-colors",
+                            tone
+                          )}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 text-xs font-bold">
+                            {item.label}
+                          </span>
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex gap-4 mb-6">
-              {/* Rating Box */}
-              <div className="bg-yellow-300 rounded-lg p-4 text-center min-w-28">
-                <p className="text-4xl font-bold text-gray-900">4.6</p>
-                <p className="text-xs text-gray-800 font-medium mt-2">Overall Rating</p>
+            {/* Coupon performance */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wide text-slate-700">
+                      <Ticket className="h-4 w-4 text-purple-500" />
+                      Coupon performance
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {couponStats?.totalRedemptions || 0} redemptions ·{" "}
+                      {couponStats?.uniqueUsers || 0} students
+                    </p>
+                  </div>
+                  <Link
+                    href="/teacher/marketing/coupons-discounts"
+                    className="text-xs font-bold text-amber-600 hover:underline"
+                  >
+                    Manage →
+                  </Link>
+                </div>
               </div>
-
-              {/* Line Chart */}
-              <div className="flex-1 relative h-28">
-                <svg viewBox="0 0 300 100" className="w-full h-full" preserveAspectRatio="none">
-                  <polyline
-                    points="0,60 20,50 40,55 60,45 80,50 100,40 120,45 140,35 160,40 180,30 200,35 220,25 240,30 260,20 280,25 300,15"
-                    fill="none"
-                    stroke="#FCD34D"
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <polyline
-                    points="0,100 20,50 40,55 60,45 80,50 100,40 120,45 140,35 160,40 180,30 200,35 220,25 240,30 260,20 280,25 300,15"
-                    fill="#FEF3C7"
-                    opacity="0.3"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            {/* Star Ratings */}
-            <div className="space-y-2.5 border-t border-gray-200 pt-4">
-              {[
-                { stars: 5, percent: 56 },
-                { stars: 4, percent: 37 },
-                { stars: 3, percent: 8 },
-                { stars: 2, percent: 1 },
-                { stars: 1, percent: '<1' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="flex text-yellow-400 w-20">
-                    {[...Array(5)].map((_, j) => (
-                      <span key={j} className="text-lg">{j < item.stars ? '★' : '☆'}</span>
+              <div className="p-4">
+                {topCoupons.length === 0 ? (
+                  <div className="flex flex-col items-center py-8 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-50">
+                      <Ticket className="h-6 w-6 text-purple-500" />
+                    </div>
+                    <p className="mt-3 text-sm font-bold text-slate-900">
+                      No coupons used yet
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Create a coupon to boost sales.
+                    </p>
+                    <Link href="/teacher/marketing/coupons-discounts">
+                      <Button
+                        className="mt-3 h-9 rounded-lg bg-yellow-400 px-3 text-xs font-bold text-gray-900 hover:bg-yellow-500"
+                        size="sm"
+                      >
+                        <Plus className="mr-1 h-3.5 w-3.5" /> Create coupon
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {topCoupons.map((c, i) => (
+                      <div
+                        key={c.code}
+                        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/40 p-3"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-fuchsia-600 text-[10px] font-black text-white">
+                          {i + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-mono text-xs font-black text-slate-900">
+                            {c.code}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {c.redemptions} use{c.redemptions === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <p className="text-xs font-black tabular-nums text-emerald-600">
+                          −{money(c.discountGiven)}
+                        </p>
+                      </div>
                     ))}
                   </div>
-                  <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                    <div className="bg-yellow-400 h-full" style={{ width: `${item.percent}%` }}></div>
-                  </div>
-                  <span className="text-xs font-semibold text-gray-900 w-8 text-right">{item.percent}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Profile View - Bar Chart */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-base">Profile View</h3>
-              <div className="relative">
-                <select className="text-xs text-gray-600 border border-gray-200 rounded px-2 py-1 bg-white cursor-pointer appearance-none pr-6">
-                  <option>Today</option>
-                  <option>Yesterday</option>
-                  <option>This week</option>
-                </select>
-                <svg className="absolute right-1.5 top-1.5 w-4 h-4 text-gray-600 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
-                </svg>
+                )}
               </div>
             </div>
-
-            <div className="h-56 flex items-end justify-center gap-1">
-              {[30, 50, 40, 60, 45, 35, 55, 50, 40, 60, 35, 25].map((height, i) => (
-                <div key={i} className="flex-1 bg-gray-200 rounded-sm hover:bg-yellow-300 transition" style={{ height: `${height}%` }}></div>
-              ))}
-            </div>
-
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <p className="text-2xl font-bold text-gray-900">$7,443</p>
-              <p className="text-xs text-gray-500">USD Dollar you earned.</p>
-            </div>
           </div>
-
-          {/* Revenue */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm">
-            <h3 className="font-bold text-base mb-6">Revenue</h3>
-
-            <div className="text-center mb-6">
-              <p className="text-4xl font-bold text-gray-900">$165,750.23</p>
-              <p className="text-xs text-gray-500 mt-2">Won from 262 Deals</p>
-            </div>
-
-            {/* Map Illustration */}
-            <div className="h-32 bg-yellow-100 rounded-xl flex items-center justify-center">
-              <svg viewBox="0 0 150 80" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-                <defs>
-                  <linearGradient id="mapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#FBBF24" stopOpacity="1" />
-                    <stop offset="100%" stopColor="#D97706" stopOpacity="1" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d="M 45 20 L 60 18 L 75 22 L 78 25 L 75 30 L 70 32 L 65 35 L 60 38 L 55 40 L 50 38 L 48 35 L 45 32 Z M 55 42 L 65 45 L 60 50 L 50 48 Z"
-                  fill="url(#mapGradient)"
-                />
-              </svg>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
-  )
+        </>
+      )}
+    </div>
+  );
 }
